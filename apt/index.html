@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Suisha APT repository</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 46rem; margin: 2rem auto; padding: 0 1rem; line-height: 1.7; color: #1c2529; background: #f6f8f9; }
+  pre { background: #fff; border: 1px solid #dbe2e6; padding: 0.8rem; overflow-x: auto; }
+  code { font-size: 0.9em; }
+  h1 { font-weight: 600; }
+</style>
+</head>
+<body>
+<h1>Suisha APT repository</h1>
+
+<p>Suisha（水車）の apt リポジトリです。Linux x64（amd64）向けで、Ubuntu 22.04 以降に対応しています。<br>
+This is the apt repository of Suisha for Linux x64 (amd64), Ubuntu 22.04 or later.</p>
+
+<h2>使い方 / Usage</h2>
+<pre><code>sudo install -d -m 0755 /etc/apt/keyrings
+curl -fsSL https://moriyama-dev.github.io/suisha/suisha-archive-keyring.gpg | sudo tee /etc/apt/keyrings/suisha-archive-keyring.gpg &gt; /dev/null
+echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/suisha-archive-keyring.gpg] https://moriyama-dev.github.io/suisha stable main" | sudo tee /etc/apt/sources.list.d/suisha.list &gt; /dev/null
+sudo apt update
+sudo apt install suisha</code></pre>
+
+<p>署名鍵のフィンガープリント / Signing key fingerprint:<br>
+<code>5E50 CE53 AC3D C290 5D94  3D67 F3A3 49A9 8664 021E</code></p>
+
+<p><a href="https://github.com/moriyama-dev/suisha">github.com/moriyama-dev/suisha</a></p>
+</body>
+</html>

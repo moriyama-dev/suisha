@@ -1,0 +1,145 @@
+name: Release
+
+on:
+  push:
+    tags:
+      # Version tags such as 0.1.0 (no "v" prefix), matching tauri.conf.json
+      - '[0-9]+.[0-9]+.[0-9]+'
+  workflow_dispatch:
+    inputs:
+      prerelease:
+        description: 'Mark the release as a pre-release'
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  version:
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - id: version
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          APP_VERSION="$( jq -r .version src-tauri/tauri.conf.json )"
+          NPM_VERSION="$( jq -r .version package.json )"
+          CARGO_VERSION="$( sed -n 's/^version = "\(.*\)"/\1/p' src-tauri/Cargo.toml | head -n 1 )"
+          if [[ "${APP_VERSION}" != "${NPM_VERSION}" || "${APP_VERSION}" != "${CARGO_VERSION}" ]]; then
+            echo "Versions differ: tauri.conf.json ${APP_VERSION}, package.json ${NPM_VERSION}, Cargo.toml ${CARGO_VERSION}" >&2
+            exit 1
+          fi
+          if [[ "${REF_TYPE}" == "tag" && "${REF_NAME}" != "${APP_VERSION}" ]]; then
+            echo "Tag ${REF_NAME} does not match tauri.conf.json (${APP_VERSION})" >&2
+            exit 1
+          fi
+          echo "version=${APP_VERSION}" >> "${GITHUB_OUTPUT}"
+          echo "Release version: ${APP_VERSION}"
+
+  linux:
+    needs: version
+    # The oldest supported Ubuntu, so the binary links against an old glibc
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          # No cache: release builds must not pick up anything another run left behind
+          package-manager-cache: false
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libssl-dev libxdo-dev xvfb x11-utils
+      - name: Install packages
+        run: npm ci
+      - name: Checks and unit tests
+        run: |
+          npm run check
+          cd src-tauri && cargo test --locked
+      - name: Build the .deb
+        run: npm run tauri build -- --bundles deb
+      - name: Launch the app
+        run: xvfb-run -a dbus-run-session -- scripts/launch-test.sh src-tauri/target/release/suisha
+      - name: Collect the package
+        env:
+          RELEASE_VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          mkdir out
+          mv src-tauri/target/release/bundle/deb/*.deb "out/suisha-${RELEASE_VERSION}-linux-amd64.deb"
+          cd out
+          for f in *; do sha256sum "${f}" > "${f}.sha256"; done
+          dpkg-deb --info ./*.deb
+          ls -la
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: linux
+          path: out/*
+          if-no-files-found: error
+
+  publish:
+    needs: [version, linux]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_VERSION: ${{ needs.version.outputs.version }}
+          # Tag pushes make normal releases; manual runs can be pre-releases
+          PRERELEASE: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.prerelease == 'true' }}
+        run: |
+          ls -la dist
+          (cd dist && sha256sum -c ./*.sha256)
+          NOTES=".github/release-notes/${RELEASE_VERSION}.md"
+          if [[ ! -f "${NOTES}" ]]; then
+            NOTES="$( mktemp )"
+            printf 'Suisha %s\n' "${RELEASE_VERSION}" > "${NOTES}"
+          fi
+          FLAGS=()
+          if [[ "${PRERELEASE}" == "true" ]]; then
+            FLAGS+=(--prerelease)
+          fi
+          if gh release view "${RELEASE_VERSION}" > /dev/null 2>&1; then
+            gh release upload "${RELEASE_VERSION}" dist/* --clobber
+          else
+            gh release create "${RELEASE_VERSION}" dist/* \
+              --title "Suisha ${RELEASE_VERSION}" \
+              --notes-file "${NOTES}" \
+              --target "${GITHUB_SHA}" \
+              "${FLAGS[@]}"
+          fi
+
+  apt:
+    # Rebuild the signed apt repository on GitHub Pages
+    needs: publish
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    uses: ./.github/workflows/apt-repo.yml
+    secrets:
+      APT_SIGNING_KEY: ${{ secrets.APT_SIGNING_KEY }}
