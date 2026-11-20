@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC
+ "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<policyconfig>
+  <vendor>Suisha</vendor>
+  <vendor_url>https://github.com/moriyama-dev/suisha</vendor_url>
+  <icon_name>suisha</icon_name>
+
+  <action id="dev.moriyama.suisha.manage">
+    <description>Install, remove or update software</description>
+    <description xml:lang="ja">ソフトウェアのインストール・削除・更新</description>
+    <message>Authentication is required to install, remove or update software with Suisha</message>
+    <message xml:lang="ja">Suisha でソフトウェアをインストール・削除・更新するには認証が必要です</message>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/lib/suisha/suisha-root</annotate>
+  </action>
+
+  <action id="dev.moriyama.suisha.auto-update">
+    <description>Update all apt and snap packages</description>
+    <description xml:lang="ja">apt と snap のパッケージをすべて更新</description>
+    <message>Authentication is required to update all apt and snap packages</message>
+    <message xml:lang="ja">apt と snap のパッケージをすべて更新するには認証が必要です</message>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/lib/suisha/suisha-auto-update</annotate>
+  </action>
+
+  <action id="dev.moriyama.suisha.self-update">
+    <description>Update Suisha</description>
+    <description xml:lang="ja">Suisha を更新</description>
+    <message>Authentication is required to update Suisha</message>
+    <message xml:lang="ja">Suisha を更新するには認証が必要です</message>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/lib/suisha/suisha-self-update</annotate>
+  </action>
+
+  <action id="dev.moriyama.suisha.configure">
+    <description>Change automatic updates</description>
+    <description xml:lang="ja">自動更新の設定を変更</description>
+    <message>Authentication is required to let Suisha install updates without asking for a password</message>
+    <message xml:lang="ja">Suisha がパスワードを聞かずに更新を入れられるようにするには認証が必要です</message>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/lib/suisha/suisha-auto-update-access</annotate>
+  </action>
+</policyconfig>

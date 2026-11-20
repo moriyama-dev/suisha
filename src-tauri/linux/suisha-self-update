@@ -1,0 +1,27 @@
+#!/bin/sh
+# Updates Suisha itself from its apt repository. Takes no arguments.
+# Run through pkexec (polkit action dev.moriyama.suisha.self-update). Users
+# who turned on "update Suisha automatically" may run it without a password.
+set -u
+export PATH=/usr/sbin:/usr/bin:/sbin:/bin
+export DEBIAN_FRONTEND=noninteractive
+umask 022
+
+if [ "$#" -ne 0 ]; then
+    echo "suisha-self-update: takes no arguments" >&2
+    exit 64
+fi
+
+list=/etc/apt/sources.list.d/suisha.list
+if [ ! -f "$list" ]; then
+    echo "suisha-self-update: $list is missing; reinstall the Suisha package" >&2
+    exit 1
+fi
+
+# Refresh only Suisha's own source, then upgrade only Suisha.
+apt-get -o DPkg::Lock::Timeout=300 \
+    -o Dir::Etc::sourcelist="$list" -o Dir::Etc::sourceparts=- \
+    -o APT::Get::List-Cleanup=0 update || exit 1
+exec apt-get -y -o DPkg::Lock::Timeout=300 \
+    -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold \
+    install --only-upgrade suisha

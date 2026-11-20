@@ -1,0 +1,16 @@
+#!/bin/sh
+set -e
+# Take back the "update without a password" permissions Suisha granted.
+if [ "$1" = remove ] || [ "$1" = purge ]; then
+    rm -f /etc/polkit-1/rules.d/49-suisha-auto-update-*.rules \
+          /etc/polkit-1/rules.d/49-suisha-self-update-*.rules
+    rm -f /etc/polkit-1/localauthority/50-local.d/49-suisha-auto-update-*.pkla \
+          /etc/polkit-1/localauthority/50-local.d/49-suisha-self-update-*.pkla
+fi
+# The apt source is configuration: it goes away on purge, and only if the
+# package wrote it.
+list=/etc/apt/sources.list.d/suisha.list
+if [ "$1" = purge ] && grep -qs "^# Added by the Suisha package" "$list"; then
+    rm -f "$list"
+fi
+exit 0

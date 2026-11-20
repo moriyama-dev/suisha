@@ -1,0 +1,89 @@
+#!/bin/sh
+# Installs, removes or updates apt and snap packages for Suisha.
+# Run through pkexec (polkit action dev.moriyama.suisha.manage).
+#
+# Usage: suisha-root MODE PACKAGE... [MODE PACKAGE...]...
+# MODE is one of:
+#   --apt-install --apt-remove --apt-upgrade
+#   --snap-install --snap-install-classic --snap-remove --snap-refresh
+# The flag --apt-autoremove (no package names) removes packages that were
+# installed as dependencies and are no longer needed.
+# The package lists below only hold names that passed valid_name, so they are
+# expanded unquoted on purpose (one argument per name).
+# shellcheck disable=SC2086
+set -u
+export PATH=/usr/sbin:/usr/bin:/sbin:/bin
+export DEBIAN_FRONTEND=noninteractive
+umask 022
+
+APT_OPTS="-y -o DPkg::Lock::Timeout=300 -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold"
+
+valid_name() {
+    case "$1" in
+        ""|-*) return 1 ;;
+        *[!A-Za-z0-9._+:@/-]*) return 1 ;;
+    esac
+    return 0
+}
+
+mode=""
+apt_install="" apt_remove="" apt_upgrade=""
+snap_install="" snap_classic="" snap_remove="" snap_refresh=""
+apt_autoremove=""
+
+for arg in "$@"; do
+    case "$arg" in
+        --apt-autoremove)
+            apt_autoremove=yes
+            mode=""
+            continue
+            ;;
+        --apt-install|--apt-remove|--apt-upgrade|--snap-install|--snap-install-classic|--snap-remove|--snap-refresh)
+            mode="$arg"
+            continue
+            ;;
+    esac
+    if [ -z "$mode" ] || ! valid_name "$arg"; then
+        echo "suisha-root: invalid argument: $arg" >&2
+        exit 64
+    fi
+    case "$mode" in
+        --apt-install) apt_install="$apt_install $arg" ;;
+        --apt-remove) apt_remove="$apt_remove $arg" ;;
+        --apt-upgrade) apt_upgrade="$apt_upgrade $arg" ;;
+        --snap-install) snap_install="$snap_install $arg" ;;
+        --snap-install-classic) snap_classic="$snap_classic $arg" ;;
+        --snap-remove) snap_remove="$snap_remove $arg" ;;
+        --snap-refresh) snap_refresh="$snap_refresh $arg" ;;
+    esac
+done
+
+status=0
+if [ -n "$apt_install$apt_upgrade" ]; then
+    apt-get $APT_OPTS update || status=1
+fi
+if [ -n "$apt_install" ]; then
+    apt-get $APT_OPTS install -- $apt_install || status=1
+fi
+if [ -n "$apt_upgrade" ]; then
+    apt-get $APT_OPTS install --only-upgrade -- $apt_upgrade || status=1
+fi
+if [ -n "$apt_remove" ]; then
+    apt-get $APT_OPTS remove -- $apt_remove || status=1
+fi
+if [ -n "$apt_autoremove" ]; then
+    apt-get $APT_OPTS autoremove || status=1
+fi
+if [ -n "$snap_install" ]; then
+    snap install $snap_install || status=1
+fi
+for name in $snap_classic; do
+    snap install --classic "$name" || status=1
+done
+if [ -n "$snap_remove" ]; then
+    snap remove $snap_remove || status=1
+fi
+if [ -n "$snap_refresh" ]; then
+    snap refresh $snap_refresh || status=1
+fi
+exit $status

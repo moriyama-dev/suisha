@@ -1,0 +1,18 @@
+#!/bin/sh
+set -e
+for helper in suisha-root suisha-auto-update suisha-self-update suisha-auto-update-access; do
+    chown root:root "/usr/lib/suisha/$helper"
+    chmod 0755 "/usr/lib/suisha/$helper"
+done
+
+# Register Suisha's apt repository, so that Suisha is updated like any other
+# package. An existing entry (for example one added by hand) is left alone.
+list=/etc/apt/sources.list.d/suisha.list
+if [ "$1" = configure ] && [ ! -e "$list" ] \
+    && ! grep -rqs "moriyama-dev.github.io/suisha" /etc/apt/sources.list /etc/apt/sources.list.d 2>/dev/null; then
+    cat > "$list" <<'LIST'
+# Added by the Suisha package. Remove this file to stop receiving updates.
+deb [arch=amd64 signed-by=/usr/share/keyrings/suisha-archive-keyring.asc] https://moriyama-dev.github.io/suisha stable main
+LIST
+fi
+exit 0
