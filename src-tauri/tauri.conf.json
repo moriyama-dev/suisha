@@ -1,0 +1,65 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Suisha",
+  "mainBinaryName": "suisha",
+  "version": "0.4.0",
+  "identifier": "dev.moriyama.suisha",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../build"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Suisha",
+        "width": 1040,
+        "height": 720,
+        "minWidth": 760,
+        "minHeight": 520
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src ipc: http://ipc.localhost"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": [
+      "deb"
+    ],
+    "category": "Utility",
+    "shortDescription": "Keep your apps up to date on Ubuntu",
+    "longDescription": "Suisha brings apt, snap, Flatpak and Homebrew together in one window: search and install, see what is installed, update everything on a schedule, and set up a new computer from a saved list.",
+    "copyright": "Copyright (c) 2026 Yoshiro Moriyama",
+    "license": "MIT",
+    "homepage": "https://github.com/moriyama-dev/suisha",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png"
+    ],
+    "linux": {
+      "deb": {
+        "depends": [
+          "pkexec | policykit-1"
+        ],
+        "recommends": [
+          "libnotify-bin"
+        ],
+        "section": "admin",
+        "files": {
+          "/usr/lib/suisha/suisha-root": "linux/suisha-root",
+          "/usr/lib/suisha/suisha-auto-update": "linux/suisha-auto-update",
+          "/usr/lib/suisha/suisha-auto-update-access": "linux/suisha-auto-update-access",
+          "/usr/share/polkit-1/actions/dev.moriyama.suisha.policy": "linux/dev.moriyama.suisha.policy",
+          "/usr/lib/suisha/suisha-self-update": "linux/suisha-self-update",
+          "/usr/share/keyrings/suisha-archive-keyring.asc": "linux/suisha-archive-keyring.asc"
+        },
+        "postInstallScript": "linux/postinst",
+        "postRemoveScript": "linux/postrm"
+      }
+    }
+  }
+}

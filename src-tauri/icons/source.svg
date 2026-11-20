@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2d8cad"/>
+      <stop offset="1" stop-color="#17617b"/>
+    </linearGradient>
+    <clipPath id="tile"><rect x="64" y="64" width="896" height="896" rx="200"/></clipPath>
+  </defs>
+  <rect x="64" y="64" width="896" height="896" rx="200" fill="url(#bg)"/>
+  <g clip-path="url(#tile)">
+    <g fill="#ffffff"><rect x="486" y="152" width="52" height="118" rx="5" transform="rotate(0.0 512 470)"/><rect x="486" y="152" width="52" height="118" rx="5" transform="rotate(22.5 512 470)"/><rect x="486" y="152" width="52" height="118" rx="5" transform="rotate(45.0 512 470)"/><rect x="486" y="152" width="52" height="118" rx="5" transform="rotate(67.5 512 470)"/><rect x="486" y="152" width="52" height="118" rx="5" transform="rotate(90.0 512 470)"/><rect x="486" y="152" width="52" height="118" rx="5" transform="rotate(112.5 512 470)"/><rect x="486" y="152" width="52" height="118" rx="5" transform="rotate(135.0 512 470)"/><rect x="486" y="152" width="52" height="118" rx="5" transform="rotate(157.5 512 470)"/><rect x="486" y="152" width="52" height="118" rx="5" transform="rotate(180.0 512 470)"/><rect x="486" y="152" width="52" height="118" rx="5" transform="rotate(202.5 512 470)"/><rect x="486" y="152" width="52" height="118" rx="5" transform="rotate(225.0 512 470)"/><rect x="486" y="152" width="52" height="118" rx="5" transform="rotate(247.5 512 470)"/><rect x="486" y="152" width="52" height="118" rx="5" transform="rotate(270.0 512 470)"/><rect x="486" y="152" width="52" height="118" rx="5" transform="rotate(292.5 512 470)"/><rect x="486" y="152" width="52" height="118" rx="5" transform="rotate(315.0 512 470)"/><rect x="486" y="152" width="52" height="118" rx="5" transform="rotate(337.5 512 470)"/></g>
+    <g fill="none" stroke="#ffffff" stroke-linecap="round">
+      <circle cx="512" cy="470" r="250" stroke-width="22"/>
+      <circle cx="512" cy="470" r="200" stroke-width="22"/>
+      <g stroke-width="20"><line x1="512" y1="470" x2="512" y2="265" transform="rotate(22.5 512 470)"/><line x1="512" y1="470" x2="512" y2="265" transform="rotate(67.5 512 470)"/><line x1="512" y1="470" x2="512" y2="265" transform="rotate(112.5 512 470)"/><line x1="512" y1="470" x2="512" y2="265" transform="rotate(157.5 512 470)"/><line x1="512" y1="470" x2="512" y2="265" transform="rotate(202.5 512 470)"/><line x1="512" y1="470" x2="512" y2="265" transform="rotate(247.5 512 470)"/><line x1="512" y1="470" x2="512" y2="265" transform="rotate(292.5 512 470)"/><line x1="512" y1="470" x2="512" y2="265" transform="rotate(337.5 512 470)"/></g>
+    </g>
+    <circle cx="512" cy="470" r="50" fill="#ffffff"/>
+    <circle cx="512" cy="470" r="18" fill="#1f7491"/>
+    <path d="M64 752 C 210 702, 340 802, 512 752 S 814 702, 960 752 L 960 960 L 64 960 Z" fill="#0d455a" opacity="0.88"/>
+    <path d="M64 752 C 210 702, 340 802, 512 752 S 814 702, 960 752" fill="none" stroke="#a6dcee" stroke-width="22" stroke-linecap="round"/>
+    <path d="M150 866 C 250 840, 330 886, 430 860" fill="none" stroke="#a6dcee" stroke-width="16" stroke-linecap="round" opacity="0.55"/>
+    <path d="M594 874 C 694 848, 774 894, 874 868" fill="none" stroke="#a6dcee" stroke-width="16" stroke-linecap="round" opacity="0.55"/>
+  </g>
+</svg>
