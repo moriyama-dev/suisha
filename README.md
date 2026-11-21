@@ -19,7 +19,7 @@ It works with **apt**, **snap**, **Flatpak** and **Homebrew** (on Linux).
 - **See what you installed**, grouped by package manager, and remove what you no longer need. Dependencies and base system packages are left out, so they cannot be removed by accident.
 - **Set up a new computer.** Save the list of your apps to a file, open it on a new or reinstalled computer, and Suisha installs whatever is missing in one go.
 - **Notices that save a trip to the terminal:** when Ubuntu needs a restart to finish updating, when packages are no longer needed (one button removes them), and when Flatpak has no app catalogue yet (one button adds Flathub).
-- **History** of every install, removal and update, including the automatic ones.
+- **History** of every install, removal and update, including the automatic ones. You choose how long entries are kept: 3, 30, 100 or 400 days, any number of days you type in, forever, or not at all. The default is 100 days.
 - English and Japanese.
 
 Suisha keeps no package catalog of its own. Everything comes from the package managers on your computer, so it shows exactly what they would.
@@ -45,7 +45,7 @@ sudo apt install suisha
 Download `suisha-<version>-linux-amd64.deb` from the [Releases](https://github.com/moriyama-dev/suisha/releases) page and run:
 
 ```sh
-sudo apt install ./suisha-0.4.0-linux-amd64.deb
+sudo apt install ./suisha-0.4.1-linux-amd64.deb
 ```
 
 Either way, Suisha is updated from then on: the package adds Suisha's apt repository (`/etc/apt/sources.list.d/suisha.list`) if it is not there yet.
