@@ -348,7 +348,22 @@ fn set_language(language: String) -> Result<(), String> {
 
 #[tauri::command]
 fn get_history() -> Vec<HistoryEntry> {
+    store::prune_history(store::load_settings().history_keep_days);
     store::read_history()
+}
+
+/// How long history entries are kept: a number of days, 0 for no history,
+/// or nothing to keep them forever. Older entries are deleted right away.
+#[tauri::command]
+fn set_history_keep_days(days: Option<u32>) -> Result<Settings, String> {
+    if days.is_some_and(|d| d > store::HISTORY_KEEP_DAYS_MAX) {
+        return Err("Invalid period".into());
+    }
+    let mut settings = store::load_settings();
+    settings.history_keep_days = days;
+    store::save_settings(&settings)?;
+    store::prune_history(days);
+    Ok(settings)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -397,6 +412,7 @@ pub fn run() {
             check_self_update,
             update_self,
             set_self_update_auto,
+            set_history_keep_days,
             system_status,
             clean_up,
             add_flathub,

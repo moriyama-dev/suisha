@@ -11,7 +11,9 @@
   let saving = $state(false);
   let granting = $state(false);
   let message = $state<{ cls: string; text: string } | null>(null);
-  let lastRun = $state('');
+  let lastRunTime = $state('');
+  // Formatted here so the text follows the display language.
+  const lastRun = $derived(lastRunTime ? formatTime(lastRunTime) : '');
 
   const a = $derived(app.settings?.autoUpdate);
   const next = $derived(a ? nextRun(a) : null);
@@ -53,12 +55,22 @@
   async function loadLastRun() {
     const history = await api.getHistory();
     const last = history.find((h) => h.trigger === 'scheduled');
-    lastRun = last ? formatTime(last.time) : '';
+    lastRunTime = last ? last.time : '';
   }
 
   onMount(async () => {
     if (!app.settings) await loadSettings();
     await loadLastRun();
+  });
+
+  let panel = $state<HTMLElement | null>(null);
+
+  // The sidebar card asks for the editor; settings may still be loading.
+  $effect(() => {
+    if (!app.autoEditRequested || !app.settings) return;
+    app.autoEditRequested = false;
+    if (!draft && !saving) edit();
+    panel?.scrollIntoView({ block: 'nearest' });
   });
 
   function edit() {
@@ -133,7 +145,7 @@
   }
 </script>
 
-<section class="hero" class:on={!!a?.enabled} aria-labelledby="auto-title">
+<section class="hero" class:on={!!a?.enabled} aria-labelledby="auto-title" bind:this={panel}>
   <div class="head">
     <div class="mark"><Wheel size={46} spinning={!!a?.enabled} /></div>
     <div class="main">
@@ -144,7 +156,11 @@
         {/if}
       </h2>
       {#if a?.enabled}
-        <p class="schedule">{scheduleText(a)}</p>
+        <p>
+          <button class="schedule" onclick={edit} disabled={saving || !!draft} title={t('auto.change')}>
+            {scheduleText(a)}
+          </button>
+        </p>
         <p class="muted small">
           {#if next}{t('auto.next', { time: formatTime(next.toISOString()) })}{/if}
           {#if next && lastRun} · {/if}
@@ -324,9 +340,23 @@
   }
 
   .schedule {
+    padding: 0;
+    border: none;
+    background: none;
     font-size: 16px;
     font-weight: 600;
     color: var(--accent-strong);
+    cursor: pointer;
+  }
+
+  .schedule:hover:not(:disabled) {
+    background: none;
+    text-decoration: underline;
+  }
+
+  .schedule:disabled {
+    opacity: 1;
+    cursor: default;
   }
 
   .controls {

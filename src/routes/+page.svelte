@@ -4,7 +4,7 @@
   import OpPanel from '$lib/components/OpPanel.svelte';
   import SelfUpdate from '$lib/components/SelfUpdate.svelte';
   import Wheel from '$lib/components/Wheel.svelte';
-  import { openRepo, reportProblem } from '$lib/feedback';
+  import { openRepo, reportProblem, sendRequest } from '$lib/feedback';
   import { i18n, setLanguage, t, type Key, type LangChoice } from '$lib/i18n.svelte';
   import { scheduleText } from '$lib/schedule';
   import {
@@ -77,6 +77,13 @@
   const autoNeedsPassword = $derived(
     !!auto?.enabled && needsAdminAccess() && !!app.info?.helpers && !app.info?.autoUpdateAllowed,
   );
+
+  function openAuto() {
+    // While the password is missing, the panel shows the button to register it;
+    // the editor would hide that.
+    app.autoEditRequested = !autoNeedsPassword;
+    go('updates');
+  }
 </script>
 
 <div class="shell">
@@ -96,7 +103,7 @@
       {/each}
     </ul>
     {#if auto}
-      <button class="auto" class:on={auto.enabled} class:warn={autoNeedsPassword} onclick={() => go('updates')}>
+      <button class="auto" class:on={auto.enabled} class:warn={autoNeedsPassword} onclick={openAuto}>
         <Wheel size={20} spinning={auto.enabled} />
         <span class="auto-text">
           <span class="small">{t('auto.sidebar')}</span>
@@ -117,6 +124,12 @@
           <path d="M8 5v9M4.5 9.5H2M14 9.5h-2.5M5 6.5 3 5M11 6.5 13 5M5 12.5 3 14M11 12.5 13 14M6 5.2 5.2 3.5M10 5.2l.8-1.7" />
         </svg>
         {t('nav.report')}
+      </button>
+      <button class="link icon" onclick={() => sendRequest(app.info)}>
+        <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M8 1.5a4.5 4.5 0 0 0-2.6 8.2c.4.3.6.7.6 1.2v.6h4v-.6c0-.5.2-.9.6-1.2A4.5 4.5 0 0 0 8 1.5ZM6.3 14h3.4" />
+        </svg>
+        {t('nav.request')}
       </button>
       <button class="link icon" onclick={openRepo}>
         <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="currentColor">
@@ -260,6 +273,8 @@
   .lang {
     display: grid;
     gap: 2px;
+    /* Set apart from the feedback links above. */
+    margin-top: 16px;
   }
 
   .content {

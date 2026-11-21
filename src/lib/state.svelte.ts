@@ -25,6 +25,8 @@ export const app = $state({
   updatesCheckedAt: 0,
   settings: null as Settings | null,
   system: null as SystemStatus | null,
+  // Set by the sidebar to ask the automatic updates panel to open its editor.
+  autoEditRequested: false,
 });
 
 export const op = $state({

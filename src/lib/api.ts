@@ -61,6 +61,8 @@ export interface Settings {
   autoUpdate: AutoUpdate;
   selfUpdateAuto: boolean;
   language: string;
+  /** History entries older than this many days are deleted. null keeps them all; 0 keeps no history. */
+  historyKeepDays: number | null;
 }
 
 export interface HistoryEntry {
@@ -137,6 +139,7 @@ export const api = {
   setLanguage: (language: string) => invoke<void>('set_language', { language }),
   grantAutoUpdateAccess: () => invoke<boolean>('grant_auto_update_access'),
   getHistory: () => invoke<HistoryEntry[]>('get_history'),
+  setHistoryKeepDays: (days: number | null) => invoke<Settings>('set_history_keep_days', { days }),
   checkSelfUpdate: () => invoke<SelfUpdate>('check_self_update'),
   updateSelf: () => invoke<OpResult>('update_self'),
   setSelfUpdateAuto: (enabled: boolean) => invoke<Settings>('set_self_update_auto', { enabled }),
