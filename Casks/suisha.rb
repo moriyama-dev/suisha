@@ -1,8 +1,8 @@
 # Homebrew cask for Suisha on macOS. The Release workflow updates version and sha256.
 #   brew install --cask moriyama-dev/suisha/suisha
 cask "suisha" do
-  version "0.5.0"
-  sha256 "1724e35d32a188ce57929d6e086309f4cc132ae9655cfa75dad556d8d28246d0"
+  version "0.5.1"
+  sha256 "74284ef0fcf940fea636ee1690ee361ddade74e66b5a4064ae83ffc48d60c0a2"
 
   url "https://github.com/moriyama-dev/suisha/releases/download/#{version}/suisha-#{version}-macos-universal.dmg"
   name "Suisha"
