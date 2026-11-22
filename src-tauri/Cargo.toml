@@ -1,6 +1,6 @@
 [package]
 name = "suisha"
-version = "0.5.0"
+version = "0.5.1"
 description = "Keep your apps up to date on Ubuntu and macOS: apt, snap, Flatpak, Homebrew and the Mac App Store in one window"
 authors = ["Yoshiro Moriyama <7315004+moriyama-dev@users.noreply.github.com>"]
 license = "MIT"
