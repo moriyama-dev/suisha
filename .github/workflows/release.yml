@@ -91,8 +91,58 @@ jobs:
           path: out/*
           if-no-files-found: error
 
+  macos:
+    needs: version
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          # No cache: release builds must not pick up anything another run left behind
+          package-manager-cache: false
+      - name: Add the Rust targets
+        run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
+      - name: Install packages
+        run: npm ci
+      - name: Checks and unit tests
+        run: |
+          npm run check
+          cd src-tauri && cargo test --locked
+      - name: Check the cask
+        run: |
+          ruby -c Casks/suisha.rb
+          brew style Casks/suisha.rb
+      # One universal app runs on both Apple silicon and Intel Macs
+      - name: Build the app
+        run: npm run tauri build -- --target universal-apple-darwin --bundles app,dmg
+      # An invalid signature only shows up as a crash at launch, so check it here
+      - name: Verify the signature
+        run: codesign --verify --deep --strict --verbose=2 src-tauri/target/universal-apple-darwin/release/bundle/macos/Suisha.app
+      - name: Install mas for the launch test
+        run: brew install mas
+      - name: Launch the app
+        run: scripts/launch-test.sh src-tauri/target/universal-apple-darwin/release/bundle/macos/Suisha.app/Contents/MacOS/suisha
+      - name: Collect the package
+        env:
+          RELEASE_VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          mkdir out
+          mv src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg "out/suisha-${RELEASE_VERSION}-macos-universal.dmg"
+          cd out
+          for f in *; do shasum -a 256 "${f}" > "${f}.sha256"; done
+          ls -la
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: macos
+          path: out/*
+          if-no-files-found: error
+
   publish:
-    needs: [version, linux]
+    needs: [version, linux, macos]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -143,3 +193,55 @@ jobs:
     uses: ./.github/workflows/apt-repo.yml
     secrets:
       APT_SIGNING_KEY: ${{ secrets.APT_SIGNING_KEY }}
+
+  homebrew:
+    # Update the cask in this repository (the tap is
+    # `brew tap moriyama-dev/suisha https://github.com/moriyama-dev/suisha`)
+    needs: [version, publish]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Update Casks/suisha.rb
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          FILE="suisha-${RELEASE_VERSION}-macos-universal.dmg"
+          gh release download "${RELEASE_VERSION}" --pattern "${FILE}.sha256" --dir "${RUNNER_TEMP}"
+          SHA="$( cut -d' ' -f1 "${RUNNER_TEMP}/${FILE}.sha256" )"
+          sed -i -e "s/^  version \".*\"/  version \"${RELEASE_VERSION}\"/" \
+                 -e "s/^  sha256 \".*\"/  sha256 \"${SHA}\"/" Casks/suisha.rb
+          git diff
+          if git diff --quiet; then exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "Update the Homebrew cask to ${RELEASE_VERSION}"
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${GH_REPO}.git" HEAD:main
+
+  homebrew-check:
+    # Install the published cask the way people do
+    needs: [version, homebrew]
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - name: Install with Homebrew
+        env:
+          REPO_URL: ${{ github.server_url }}/${{ github.repository }}
+          RELEASE_VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          brew tap moriyama-dev/suisha "${REPO_URL}"
+          brew install --cask moriyama-dev/suisha/suisha
+          ls -la /Applications/Suisha.app/Contents/MacOS
+          if xattr -p com.apple.quarantine /Applications/Suisha.app 2> /dev/null; then
+            echo "The quarantine flag is still set" >&2
+            exit 1
+          fi
+          /Applications/Suisha.app/Contents/MacOS/suisha --version | grep -F "suisha ${RELEASE_VERSION}"
+          brew list --cask --versions moriyama-dev/suisha/suisha
+          brew uninstall --cask moriyama-dev/suisha/suisha

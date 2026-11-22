@@ -1,7 +1,7 @@
 name: Launch test
 
-# Builds Suisha and launches it on GitHub's own runner, before a release is
-# tagged. Run by hand only; it uses no secrets and can only read the repository.
+# Builds Suisha and launches it on GitHub's own runners (Ubuntu and macOS),
+# before a release is tagged. Run by hand only; it uses no secrets and can only read the repository.
 on:
   workflow_dispatch:
 
@@ -46,3 +46,44 @@ jobs:
         run: |
           dpkg-deb --info src-tauri/target/release/bundle/deb/*.deb
           dpkg-deb --contents src-tauri/target/release/bundle/deb/*.deb
+
+  macos:
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          # No cache: release builds must not pick up anything another run left behind
+          package-manager-cache: false
+      - name: Add the Rust targets
+        run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
+      - name: Install packages
+        run: npm ci
+      - name: Checks and unit tests
+        run: |
+          npm run check
+          cd src-tauri && cargo test --locked
+      - name: Check the cask
+        run: |
+          ruby -c Casks/suisha.rb
+          brew style Casks/suisha.rb
+      - name: Build the app
+        run: npm run tauri build -- --target universal-apple-darwin --bundles app,dmg
+      # An invalid signature only shows up as a crash at launch, so check it here
+      - name: Verify the signature
+        run: codesign --verify --deep --strict --verbose=2 src-tauri/target/universal-apple-darwin/release/bundle/macos/Suisha.app
+      - name: Install mas for the launch test
+        run: brew install mas
+      - name: Launch the app
+        run: scripts/launch-test.sh src-tauri/target/universal-apple-darwin/release/bundle/macos/Suisha.app/Contents/MacOS/suisha
+      - name: Check the scheduled jobs and the notification
+        run: scripts/macos-schedule-test.sh src-tauri/target/universal-apple-darwin/release/bundle/macos/Suisha.app/Contents/MacOS/suisha
+      - name: Show the app
+        run: |
+          lipo -info src-tauri/target/universal-apple-darwin/release/bundle/macos/Suisha.app/Contents/MacOS/suisha
+          plutil -p src-tauri/target/universal-apple-darwin/release/bundle/macos/Suisha.app/Contents/Info.plist
+          ls -la src-tauri/target/universal-apple-darwin/release/bundle/dmg

@@ -7,15 +7,22 @@ pub enum ManagerId {
     Apt,
     Snap,
     Flatpak,
+    /// Homebrew formulae (on Linux and macOS).
     Brew,
+    /// Homebrew casks (macOS apps).
+    BrewCask,
+    /// The Mac App Store, read through the `mas` command line tool.
+    Mas,
 }
 
 impl ManagerId {
-    pub const ALL: [ManagerId; 4] = [
+    pub const ALL: [ManagerId; 6] = [
         ManagerId::Apt,
         ManagerId::Snap,
         ManagerId::Flatpak,
         ManagerId::Brew,
+        ManagerId::BrewCask,
+        ManagerId::Mas,
     ];
 
     pub fn as_str(self) -> &'static str {
@@ -24,6 +31,8 @@ impl ManagerId {
             ManagerId::Snap => "snap",
             ManagerId::Flatpak => "flatpak",
             ManagerId::Brew => "brew",
+            ManagerId::BrewCask => "brew-cask",
+            ManagerId::Mas => "mas",
         }
     }
 
@@ -137,7 +146,9 @@ mod tests {
             "python3.12",
             "org.mozilla.firefox",
             "someone/tap/tool",
+            "homebrew/cask-fonts/font-noto",
             "node@20",
+            "497799835",
             "libfoo:amd64",
         ] {
             assert!(valid_package_id(ok), "{ok}");

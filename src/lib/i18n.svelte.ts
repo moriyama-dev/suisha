@@ -126,7 +126,7 @@ const en = {
   'setup.notASetupFile': 'This file is not a list saved by Suisha.',
   'setup.newerVersion': 'This list was saved by a newer version of Suisha. Update Suisha and try again.',
   'setup.otherOs':
-    'This list was not saved on Linux. Suisha can only open lists saved on Linux.',
+    'This list was saved on {os}. Suisha opens only lists saved on the same kind of system, because the apps come from different places.',
   'setup.fileFilter': 'Suisha list',
 
   'history.title': 'History',
@@ -203,6 +203,29 @@ const en = {
   'op.hideLog': 'Hide details',
   'op.password': 'If the system asks for your password, enter it to continue.',
 
+  'common.noManagersMac':
+    'No supported package manager was found. Suisha works with Homebrew (install it from brew.sh) and, through the mas tool, the Mac App Store.',
+  'auto.explainMac':
+    'macOS starts Suisha at that time, even when the window is closed. If the Mac was asleep, it runs after it wakes up.',
+  'auto.masNote':
+    'Mac App Store apps are not included: the App Store updates them by itself when “Automatic Updates” is on in its settings.',
+  'installed.noteMac':
+    'Shows what you installed yourself. Formulae pulled in as dependencies are left out.',
+  'installed.masRemove': 'Remove App Store apps from Finder or Launchpad.',
+  'installed.masRemoveShort': 'Remove in Finder',
+  'search.openAppStore': 'Open in App Store',
+  'search.masNote': 'App Store apps are installed in the App Store: the button opens the app’s page there.',
+  'updates.openAppStore': 'Open App Store',
+  'updates.masNote':
+    'Mac App Store apps are updated in the App Store. The button opens its Updates page; “Update all” opens it too.',
+  'self.viaBrew':
+    'Suisha is a Homebrew cask, so it is also updated together with your other apps, by “Update all” and by automatic updates.',
+  'self.autoTextMac':
+    'Once a day, Homebrew installs Suisha’s new version in the background. No password is needed.',
+  'self.manualMac':
+    'This copy was not installed with Homebrew, so it cannot update itself. Download the new disk image, or install Suisha with Homebrew to keep it up to date.',
+  'self.noBrew': 'Install Suisha with Homebrew to let it update itself.',
+  'os.macos': 'macOS',
   'os.linux': 'Linux',
 
   'day.0': 'Sunday',
@@ -340,7 +363,7 @@ const ja: Record<Key, string> = {
   'setup.tooLarge': 'ファイルが大きすぎます。Suisha の一覧ではないようです。',
   'setup.notASetupFile': 'このファイルは Suisha で保存した一覧ではありません。',
   'setup.newerVersion': '新しい版の Suisha で保存された一覧です。Suisha を更新してから開いてください。',
-  'setup.otherOs': 'この一覧は Linux で保存されたものではありません。Suisha で開けるのは、Linux で保存した一覧だけです。',
+  'setup.otherOs': 'この一覧は {os} で保存されたものです。アプリの入手先が違うため、Suisha で開けるのは同じ種類のシステムで保存した一覧だけです。',
   'setup.fileFilter': 'Suisha の一覧',
 
   'history.title': '記録',
@@ -416,6 +439,29 @@ const ja: Record<Key, string> = {
   'op.hideLog': '詳細を隠す',
   'op.password': 'パスワードを求められたら、入力すると続きが始まります。',
 
+  'common.noManagersMac':
+    '対応しているパッケージマネージャーが見つかりません。Suisha が扱えるのは Homebrew（brew.sh から入れられます）と、mas というツールを通した Mac App Store です。',
+  'auto.explainMac':
+    'その時刻になると、macOS が Suisha を起動します。画面を閉じていても動きます。Mac がスリープ中だったときは、復帰したあとで動きます。',
+  'auto.masNote':
+    'Mac App Store のアプリは含めません。App Store の設定で「自動アップデート」をオンにすると、App Store が自分で更新します。',
+  'installed.noteMac':
+    '自分で入れたものだけを表示します。依存関係として一緒に入った formula は表示しません。',
+  'installed.masRemove': 'App Store のアプリは Finder か Launchpad から削除してください。',
+  'installed.masRemoveShort': 'Finder で削除',
+  'search.openAppStore': 'App Store で開く',
+  'search.masNote': 'App Store のアプリは App Store でインストールします。ボタンを押すと、そのアプリのページが開きます。',
+  'updates.openAppStore': 'App Store を開く',
+  'updates.masNote':
+    'Mac App Store のアプリは App Store で更新します。ボタンを押すと App Store の「アップデート」が開きます。「すべて更新」でも開きます。',
+  'self.viaBrew':
+    'Suisha は Homebrew の cask なので、「すべて更新」や自動更新でも、ほかのアプリと一緒に更新されます。',
+  'self.autoTextMac':
+    '1日1回、Homebrew が Suisha の新しい版を裏で入れます。パスワードは要りません。',
+  'self.manualMac':
+    'このコピーは Homebrew で入れたものではないため、自分では更新できません。新しいディスクイメージをダウンロードするか、Homebrew で入れ直すと、自動で最新に保てます。',
+  'self.noBrew': 'Suisha が自分で更新するには、Homebrew で Suisha を入れてください。',
+  'os.macos': 'macOS',
   'os.linux': 'Linux',
 
   'day.0': '日曜日',

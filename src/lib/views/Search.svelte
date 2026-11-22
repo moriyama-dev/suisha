@@ -73,6 +73,9 @@
     {MANAGER_LABELS[g.m]}
     <span class="badge">{g.list.length}</span>
   </div>
+  {#if g.m === 'mas' && g.list.length}
+    <p class="muted small">{t('search.masNote')}</p>
+  {/if}
   {#if g.error}
     <p class="notice error small">{t('common.error', { manager: MANAGER_LABELS[g.m], message: g.error })}</p>
   {/if}
@@ -92,7 +95,9 @@
           {#if isInstalled(p)}
             <span class="badge ok">{t('search.installed')}</span>
           {:else}
-            <button onclick={() => install(p)} disabled={op.running}>{t('search.install')}</button>
+            <button onclick={() => install(p)} disabled={op.running}>
+              {p.manager === 'mas' ? t('search.openAppStore') : t('search.install')}
+            </button>
           {/if}
         </div>
       {/each}

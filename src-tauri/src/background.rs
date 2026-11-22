@@ -73,6 +73,26 @@ fn texts(lang: &str) -> [&'static str; 4] {
 }
 
 fn notify(title: &str, body: &str) {
+    if cfg!(target_os = "macos") {
+        // The texts reach AppleScript as arguments, never as script code.
+        if let Some(osascript) = find_bin("osascript") {
+            let _ = run(
+                &osascript,
+                &[
+                    "-e",
+                    "on run argv",
+                    "-e",
+                    "display notification (item 2 of argv) with title (item 1 of argv)",
+                    "-e",
+                    "end run",
+                    title,
+                    body,
+                ],
+                Duration::from_secs(20),
+            );
+        }
+        return;
+    }
     if let Some(notify_send) = find_bin("notify-send") {
         let _ = run(
             &notify_send,
@@ -98,6 +118,9 @@ pub fn auto_update() -> i32 {
         .iter()
         .copied()
         .filter(|m| a.managers.is_empty() || a.managers.contains(m))
+        // The App Store updates its apps by itself (its own setting); Suisha
+        // can only open its updates page, which makes no sense on a timer.
+        .filter(|m| *m != ManagerId::Mas)
         .collect();
 
     // apt and snap only when the user allowed password-less updates;
@@ -128,7 +151,7 @@ pub fn auto_update() -> i32 {
     }
 
     let before = pending(&chosen);
-    let steps = match managers::plan_update_all(&chosen, include_admin) {
+    let steps = match managers::plan_update_all(&chosen, include_admin, false) {
         Ok(s) => s,
         Err(e) => {
             store::append_history(&[store::HistoryEntry {
@@ -174,8 +197,13 @@ pub fn self_update() -> i32 {
     if !settings.self_update_auto {
         return 0;
     }
-    // A timer has nobody to type a password.
-    if !privileged::allowed(privileged::Helper::SelfUpdate) {
+    if cfg!(target_os = "macos") {
+        if crate::self_update::channel() != "brew" {
+            eprintln!("suisha: this copy was not installed with Homebrew");
+            return 0;
+        }
+    } else if !privileged::allowed(privileged::Helper::SelfUpdate) {
+        // A timer has nobody to type a password.
         eprintln!("suisha: updating itself without a password is not allowed");
         return 0;
     }
@@ -202,7 +230,7 @@ pub fn self_update() -> i32 {
             time: store::now(),
             trigger: "scheduled".into(),
             action: "update".into(),
-            managers: vec![ManagerId::Apt],
+            managers: vec![crate::self_update::manager()],
             packages: vec!["suisha".into()],
             success,
             message: output

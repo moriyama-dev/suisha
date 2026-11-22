@@ -3,7 +3,7 @@
   import { api, MANAGER_LABELS, type AutoUpdate, type ManagerId } from '$lib/api';
   import { t, tMessage, type Key } from '$lib/i18n.svelte';
   import { scheduleText, nextRun, timeText, hoursText } from '$lib/schedule';
-  import { app, loadInfo, loadSettings, managers, needsAdminAccess } from '$lib/state.svelte';
+  import { app, autoManagers, isMac, loadInfo, loadSettings, managers, needsAdminAccess } from '$lib/state.svelte';
   import { formatTime } from '$lib/time';
   import Wheel from './Wheel.svelte';
 
@@ -79,7 +79,7 @@
     draft = {
       ...current,
       enabled: true,
-      managers: current.managers.length ? [...current.managers] : managers(),
+      managers: (current.managers.length ? current.managers : autoManagers()).filter((m) => m !== 'mas'),
     };
     message = null;
   }
@@ -90,7 +90,7 @@
     message = null;
     try {
       // Saving every available manager is stored as "all", so managers added later are included.
-      const all = managers().every((m) => nextSettings.managers.includes(m));
+      const all = autoManagers().every((m) => nextSettings.managers.includes(m));
       const res = await api.saveSettings({
         ...app.settings,
         autoUpdate: { ...nextSettings, managers: all ? [] : nextSettings.managers },
@@ -246,7 +246,7 @@
 
       <fieldset>
         <legend>{t('auto.what')}</legend>
-        {#each managers() as m (m)}
+        {#each autoManagers() as m (m)}
           <label class="check">
             <input
               type="checkbox"
@@ -257,13 +257,16 @@
           </label>
         {/each}
       </fieldset>
+      {#if managers().includes('mas')}
+        <p class="muted small">{t('auto.masNote')}</p>
+      {/if}
 
       <label class="check">
         <input type="checkbox" bind:checked={draft.notify} />
         {t('auto.notify')}
       </label>
 
-      <p class="muted small">{t('auto.explainLinux')}</p>
+      <p class="muted small">{isMac() ? t('auto.explainMac') : t('auto.explainLinux')}</p>
 
       {#if draftNeedsPassword}
         <div class="admin warn">

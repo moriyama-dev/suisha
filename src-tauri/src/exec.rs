@@ -3,14 +3,17 @@
 use std::io::{BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::sync::mpsc;
+use std::sync::{OnceLock, mpsc};
 use std::thread;
 use std::time::Duration;
 
-/// Directories searched in addition to `PATH`. Apps started from a desktop
-/// launcher or a systemd timer get a short `PATH`, so snap and Homebrew
-/// would be missed.
+/// Directories searched in addition to `PATH`. Apps started from Finder, a
+/// desktop launcher or a system timer get a short `PATH`, so snap and
+/// Homebrew would be missed.
 const EXTRA_DIRS: &[&str] = &[
+    // Homebrew on Apple silicon Macs.
+    "/opt/homebrew/bin",
+    // Homebrew on Intel Macs.
     "/usr/local/bin",
     "/home/linuxbrew/.linuxbrew/bin",
     "/usr/bin",
@@ -77,6 +80,35 @@ impl Output {
     }
 }
 
+/// A program `sudo -A` runs to ask for the password (macOS, while the window
+/// is open). Homebrew uses it for casks whose installer needs administrator
+/// rights; without it, those would fail because there is no terminal.
+static ASKPASS: OnceLock<PathBuf> = OnceLock::new();
+
+pub fn set_askpass(path: PathBuf) {
+    let _ = ASKPASS.set(path);
+}
+
+/// The askpass program: shows the standard macOS password dialog through
+/// `osascript` and prints what was typed. The prompt is a fixed text, so
+/// nothing from outside ends up in the AppleScript.
+pub fn askpass_script(prompt: &str) -> String {
+    // Inside single quotes (shell) and double quotes (AppleScript): keep
+    // the prompt free of both kinds of quote and of backslashes.
+    let prompt = prompt
+        .replace('\\', "")
+        .replace('"', "\u{201d}")
+        .replace('\'', "\u{2019}");
+    format!(
+        "#!/bin/sh\n\
+         # Written by Suisha. Asks for the administrator password that Homebrew\n\
+         # needs for some apps, using the standard macOS dialog.\n\
+         exec /usr/bin/osascript \\\n\
+         \x20 -e 'display dialog \"{prompt}\" default answer \"\" with hidden answer with title \"Suisha\" with icon caution' \\\n\
+         \x20 -e 'text returned of result'\n"
+    )
+}
+
 fn base_command(program: &Path, args: &[String]) -> Command {
     let mut cmd = Command::new(program);
     cmd.args(args)
@@ -89,6 +121,9 @@ fn base_command(program: &Path, args: &[String]) -> Command {
         .env("NONINTERACTIVE", "1")
         .env("DEBIAN_FRONTEND", "noninteractive")
         .stdin(Stdio::null());
+    if let Some(askpass) = ASKPASS.get() {
+        cmd.env("SUDO_ASKPASS", askpass);
+    }
     cmd
 }
 
@@ -240,6 +275,17 @@ mod tests {
         let slow = run(&sh, &["-c", "sleep 5"], Duration::from_millis(200));
         assert!(slow.timed_out);
         assert!(!slow.success);
+    }
+
+    #[test]
+    fn askpass_text_is_one_fixed_dialog() {
+        let text = askpass_script("Suisha needs \"your\" admin's password\\");
+        assert!(text.starts_with("#!/bin/sh\n"));
+        assert!(text.contains("display dialog \"Suisha needs \u{201d}your\u{201d} admin\u{2019}s password\" default answer"));
+        // Exactly the two quoted -e arguments, nothing else in single quotes.
+        assert_eq!(text.matches('\'').count(), 4);
+        assert!(text.contains("with hidden answer"));
+        assert!(text.ends_with("-e 'text returned of result'\n"));
     }
 
     #[test]

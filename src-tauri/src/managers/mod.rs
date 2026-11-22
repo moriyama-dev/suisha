@@ -4,6 +4,7 @@
 pub mod apt;
 pub mod brew;
 pub mod flatpak;
+pub mod mas;
 pub mod snap;
 pub mod text;
 
@@ -21,15 +22,33 @@ const READ_TIMEOUT: Duration = Duration::from_secs(180);
 const SEARCH_TIMEOUT: Duration = Duration::from_secs(60);
 const SEARCH_LIMIT: usize = 60;
 
+const LINUX: bool = cfg!(target_os = "linux");
+const MACOS: bool = cfg!(target_os = "macos");
+
 pub fn binary(m: ManagerId) -> Option<PathBuf> {
     match m {
-        ManagerId::Apt => find_bin("apt-get"),
-        ManagerId::Snap => find_bin("snap"),
-        ManagerId::Flatpak => find_bin("flatpak"),
-        // Homebrew on Linux, for people who use it next to apt.
+        ManagerId::Apt if LINUX => find_bin("apt-get"),
+        ManagerId::Snap if LINUX => find_bin("snap"),
+        ManagerId::Flatpak if LINUX => find_bin("flatpak"),
+        // Homebrew on macOS, and on Linux for people who use it next to apt.
         ManagerId::Brew => find_bin("brew"),
+        ManagerId::BrewCask if MACOS => find_bin("brew"),
+        ManagerId::Mas if MACOS => find_bin("mas"),
+        _ => None,
     }
 }
+
+/// The macOS `open` command, which hands a link to the app that handles it.
+fn open_tool() -> Result<PathBuf, String> {
+    tool("open")
+}
+
+/// The App Store page of one app.
+pub fn app_store_page(id: &str) -> String {
+    format!("macappstore://apps.apple.com/app/id{id}")
+}
+
+pub const APP_STORE_UPDATES: &str = "macappstore://showUpdatesPage";
 
 pub fn available() -> Vec<ManagerId> {
     ManagerId::ALL
@@ -96,6 +115,19 @@ pub fn installed(m: ManagerId) -> Result<Vec<Package>, String> {
             ))?;
             Ok(brew::formulae_from(&leaves, &versions))
         }
+        ManagerId::BrewCask => Ok(brew::casks_from(&checked(run(
+            &bin(m)?,
+            &["list", "--cask", "--versions"],
+            READ_TIMEOUT,
+        ))?)),
+        ManagerId::Mas => {
+            let out = run(&bin(m)?, &["list"], READ_TIMEOUT);
+            // Some versions of mas report an empty list as an error.
+            if !out.success && out.tail().contains("No installed apps") {
+                return Ok(Vec::new());
+            }
+            Ok(mas::parse_list(&checked(out)?))
+        }
     }
 }
 
@@ -126,6 +158,10 @@ pub fn installed_ids(m: ManagerId) -> Result<std::collections::HashSet<String>, 
         ManagerId::Brew => {
             let brew = bin(m)?;
             let out = checked(run(&brew, &["list", "--formula", "-1"], READ_TIMEOUT))?;
+            Ok(text::lines(&out).map(|l| l.trim().to_string()).collect())
+        }
+        ManagerId::BrewCask => {
+            let out = checked(run(&bin(m)?, &["list", "--cask", "-1"], READ_TIMEOUT))?;
             Ok(text::lines(&out).map(|l| l.trim().to_string()).collect())
         }
         _ => Ok(installed(m)?
@@ -219,9 +255,24 @@ pub fn updates(m: ManagerId) -> Result<Vec<Package>, String> {
             }
             Ok(list)
         }
-        ManagerId::Brew => Ok(brew::parse_outdated(&checked(run(
+        ManagerId::Brew | ManagerId::BrewCask => {
+            let flag = if m == ManagerId::Brew {
+                "--formula"
+            } else {
+                "--cask"
+            };
+            Ok(brew::parse_outdated(&checked(run(
+                &bin(m)?,
+                &["outdated", flag, "--json=v2"],
+                READ_TIMEOUT,
+            ))?)
+            .into_iter()
+            .filter(|p| p.manager == Some(m))
+            .collect())
+        }
+        ManagerId::Mas => Ok(mas::parse_outdated(&checked(run(
             &bin(m)?,
-            &["outdated", "--formula", "--json=v2"],
+            &["outdated"],
             READ_TIMEOUT,
         ))?)),
     }
@@ -260,13 +311,26 @@ pub fn search(m: ManagerId, query: &str) -> Result<Vec<Package>, String> {
             ],
             SEARCH_TIMEOUT,
         ))?),
-        ManagerId::Brew => {
-            let out = run(&bin(m)?, &["search", "--formula", query], SEARCH_TIMEOUT);
+        ManagerId::Brew | ManagerId::BrewCask => {
+            let flag = if m == ManagerId::Brew {
+                "--formula"
+            } else {
+                "--cask"
+            };
+            let out = run(&bin(m)?, &["search", flag, query], SEARCH_TIMEOUT);
             // Exit code 1 means "nothing found".
             if !out.success && out.code != Some(1) {
                 return Err(out.tail());
             }
-            brew::parse_search(&out.stdout)
+            brew::parse_search(&out.stdout, m)
+        }
+        ManagerId::Mas => {
+            let out = run(&bin(m)?, &["search", query], SEARCH_TIMEOUT);
+            // `mas search` exits with an error when nothing matches.
+            if !out.success && !out.stdout.trim().is_empty() {
+                return Err(out.tail());
+            }
+            mas::parse_search(&out.stdout)
         }
     };
     rank(&mut list, query);
@@ -371,13 +435,18 @@ pub fn plan(action: Action, refs: &[PackageRef]) -> Result<Vec<Step>, String> {
                 }
             }
             ManagerId::Flatpak => steps.extend(plan_flatpak(action, &group)?),
-            ManagerId::Brew => {
+            ManagerId::Brew | ManagerId::BrewCask => {
                 let verb = match action {
                     Action::Install => "install",
                     Action::Remove => "uninstall",
                     Action::Update => "upgrade",
                 };
-                let mut args = strings(&[verb, "--formula"]);
+                let kind = if m == ManagerId::Brew {
+                    "--formula"
+                } else {
+                    "--cask"
+                };
+                let mut args = strings(&[verb, kind]);
                 args.extend(ids.iter().cloned());
                 steps.push(Step {
                     managers: vec![m],
@@ -386,6 +455,7 @@ pub fn plan(action: Action, refs: &[PackageRef]) -> Result<Vec<Step>, String> {
                     packages: ids,
                 });
             }
+            ManagerId::Mas => steps.extend(plan_mas(action, &ids)?),
         }
     }
 
@@ -396,6 +466,40 @@ pub fn plan(action: Action, refs: &[PackageRef]) -> Result<Vec<Step>, String> {
         steps = all;
     }
     Ok(steps)
+}
+
+/// Installing and updating App Store apps needs the App Store itself (`mas`
+/// asks for an administrator password in a terminal, which a window cannot
+/// answer). So Suisha opens the right page of the App Store instead.
+pub fn plan_mas(action: Action, ids: &[String]) -> Result<Vec<Step>, String> {
+    if ids
+        .iter()
+        .any(|id| id.is_empty() || !id.chars().all(|c| c.is_ascii_digit()))
+    {
+        return Err("Not a valid App Store app".into());
+    }
+    if action == Action::Remove {
+        return Err("Remove App Store apps from Finder or Launchpad.".into());
+    }
+    let open = open_tool()?;
+    match action {
+        Action::Install => Ok(ids
+            .iter()
+            .map(|id| Step {
+                managers: vec![ManagerId::Mas],
+                program: open.clone(),
+                args: vec![app_store_page(id)],
+                packages: vec![id.clone()],
+            })
+            .collect()),
+        Action::Update => Ok(vec![Step {
+            managers: vec![ManagerId::Mas],
+            program: open,
+            args: vec![APP_STORE_UPDATES.into()],
+            packages: ids.to_vec(),
+        }]),
+        Action::Remove => unreachable!("handled above"),
+    }
 }
 
 fn plan_flatpak(action: Action, group: &[&PackageRef]) -> Result<Vec<Step>, String> {
@@ -446,8 +550,14 @@ fn plan_flatpak(action: Action, group: &[&PackageRef]) -> Result<Vec<Step>, Stri
     Ok(steps)
 }
 
-/// Commands that update everything. `include_admin` adds apt and snap.
-pub fn plan_update_all(managers: &[ManagerId], include_admin: bool) -> Result<Vec<Step>, String> {
+/// Commands that update everything. `include_admin` adds apt and snap, and
+/// `interactive` opens the App Store's updates page when App Store apps have
+/// updates (a scheduled run leaves them to the App Store's own setting).
+pub fn plan_update_all(
+    managers: &[ManagerId],
+    include_admin: bool,
+    interactive: bool,
+) -> Result<Vec<Step>, String> {
     let mut steps = Vec::new();
     let wants = |m: ManagerId| managers.contains(&m) && binary(m).is_some();
 
@@ -462,15 +572,40 @@ pub fn plan_update_all(managers: &[ManagerId], include_admin: bool) -> Result<Ve
             packages: vec![],
         });
     }
-    if wants(ManagerId::Brew) {
-        let brew = bin(ManagerId::Brew)?;
-        for args in [strings(&["update"]), strings(&["upgrade", "--formula"])] {
+    let brew_managers: Vec<ManagerId> = [ManagerId::Brew, ManagerId::BrewCask]
+        .into_iter()
+        .filter(|m| wants(*m))
+        .collect();
+    if let Some(&first) = brew_managers.first() {
+        let brew = bin(first)?;
+        steps.push(Step {
+            managers: brew_managers.clone(),
+            program: brew.clone(),
+            args: strings(&["update"]),
+            packages: vec![],
+        });
+        for m in &brew_managers {
+            let kind = if *m == ManagerId::Brew {
+                "--formula"
+            } else {
+                "--cask"
+            };
             steps.push(Step {
-                managers: vec![ManagerId::Brew],
+                managers: vec![*m],
                 program: brew.clone(),
-                args,
+                args: strings(&["upgrade", kind]),
                 packages: vec![],
             });
+        }
+    }
+    if interactive && wants(ManagerId::Mas) {
+        let waiting: Vec<String> = updates(ManagerId::Mas)
+            .unwrap_or_default()
+            .into_iter()
+            .map(|p| p.id)
+            .collect();
+        if !waiting.is_empty() {
+            steps.extend(plan_mas(Action::Update, &waiting)?);
         }
     }
     Ok(steps)
@@ -510,6 +645,28 @@ mod tests {
         let mut bad_scope = r(ManagerId::Flatpak, "org.x.Y");
         bad_scope.scope = "--system".into();
         assert!(plan(Action::Remove, &[bad_scope]).is_err());
+        assert!(plan_mas(Action::Install, &["xcode".into()]).is_err());
+    }
+
+    #[test]
+    fn app_store_links() {
+        assert_eq!(
+            app_store_page("497799835"),
+            "macappstore://apps.apple.com/app/id497799835"
+        );
+        // Removing goes through Finder; this is checked before `open` is needed.
+        assert!(plan_mas(Action::Remove, &["497799835".into()]).is_err());
+    }
+
+    #[test]
+    fn mac_only_managers_are_hidden_on_linux() {
+        if cfg!(target_os = "linux") {
+            assert!(binary(ManagerId::BrewCask).is_none());
+            assert!(binary(ManagerId::Mas).is_none());
+        } else {
+            assert!(binary(ManagerId::Apt).is_none());
+            assert!(binary(ManagerId::Snap).is_none());
+        }
     }
 
     #[test]

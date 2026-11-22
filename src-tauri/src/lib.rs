@@ -66,6 +66,9 @@ struct AppInfo {
     helpers: bool,
     /// This user may run the automatic update without a password.
     auto_update_allowed: bool,
+    /// "Update Suisha automatically" can be turned on (the Suisha package on
+    /// Linux, the Homebrew cask on macOS).
+    self_update_auto: bool,
 }
 
 #[tauri::command]
@@ -77,6 +80,7 @@ async fn app_info() -> Result<AppInfo, String> {
             managers: managers::available(),
             helpers: demo() || privileged::helpers_installed(),
             auto_update_allowed: demo() || privileged::auto_update_allowed(),
+            self_update_auto: demo() || self_update::auto_supported(),
         })
     })
     .await
@@ -127,7 +131,7 @@ async fn run_action(
 async fn update_all(app: AppHandle, managers: Vec<ManagerId>) -> Result<OpResult, String> {
     blocking(move || {
         let _guard = BusyGuard::take()?;
-        let steps = managers::plan_update_all(&managers, true)?;
+        let steps = managers::plan_update_all(&managers, true, true)?;
         Ok(run_steps(&app, &steps, "update-all"))
     })
     .await
@@ -244,7 +248,12 @@ async fn check_self_update() -> Result<self_update::SelfUpdate, String> {
                 current: env!("CARGO_PKG_VERSION").into(),
                 latest: "0.5.0".into(),
                 available: true,
-                channel: "apt".into(),
+                channel: if cfg!(target_os = "macos") {
+                    "brew"
+                } else {
+                    "apt"
+                }
+                .into(),
                 releases_url: self_update::RELEASES_URL.into(),
                 auto_allowed: false,
             });
@@ -270,7 +279,11 @@ async fn update_self(app: AppHandle) -> Result<OpResult, String> {
 #[tauri::command]
 async fn set_self_update_auto(enabled: bool) -> Result<Settings, String> {
     blocking(move || {
-        if enabled {
+        if enabled && cfg!(target_os = "macos") {
+            if self_update::channel() != "brew" {
+                return Err("self.noBrew".into());
+            }
+        } else if enabled {
             if !privileged::helpers_installed() {
                 return Err("auto.noHelpers".into());
             }
@@ -339,6 +352,7 @@ fn restart_app(app: AppHandle) {
 fn set_language(language: String) -> Result<(), String> {
     let mut s = store::load_settings();
     let language = if language == "ja" { "ja" } else { "en" }.to_string();
+    prepare_askpass(&language);
     if s.language != language {
         s.language = language;
         store::save_settings(&s)?;
@@ -366,10 +380,34 @@ fn set_history_keep_days(days: Option<u32>) -> Result<Settings, String> {
     Ok(settings)
 }
 
+/// macOS: the password dialog Homebrew uses (through `sudo -A`) for apps
+/// whose installer needs administrator rights. Written next to the settings,
+/// readable only by this user.
+fn prepare_askpass(language: &str) {
+    if !cfg!(target_os = "macos") {
+        return;
+    }
+    use std::os::unix::fs::PermissionsExt;
+    let prompt = if language == "ja" {
+        "Homebrew がアプリをインストール・更新するために、管理者のパスワードが必要です。Mac にログインするときのパスワードを入力してください。"
+    } else {
+        "Homebrew needs an administrator password to install or update this app. Enter the password you use to log in to this Mac."
+    };
+    let dir = store::data_dir();
+    let path = dir.join("askpass.sh");
+    let written = std::fs::create_dir_all(&dir)
+        .and_then(|_| std::fs::write(&path, exec::askpass_script(prompt)))
+        .and_then(|_| std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o700)));
+    if written.is_ok() {
+        exec::set_askpass(path);
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // Keep the timer pointing at this copy of the app (it may have moved).
     let settings = store::load_settings();
+    prepare_askpass(&settings.language);
     if settings.auto_update.enabled {
         let _ = schedule::apply(&settings.auto_update);
     }

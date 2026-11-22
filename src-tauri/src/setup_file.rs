@@ -19,7 +19,7 @@ const MAX_SIZE: u64 = 5 * 1024 * 1024;
 pub struct SetupFile {
     pub format: String,
     pub version: u32,
-    /// Always "linux". Lists from another system are not opened.
+    /// "linux" or "macos". Lists from the other system are not opened.
     pub os: String,
     pub exported_at: String,
     pub packages: Vec<SetupEntry>,
@@ -58,7 +58,11 @@ impl From<&Package> for SetupEntry {
 }
 
 pub fn current_os() -> &'static str {
-    "linux"
+    if cfg!(target_os = "macos") {
+        "macos"
+    } else {
+        "linux"
+    }
 }
 
 pub fn build(packages: &[Package]) -> SetupFile {
@@ -195,7 +199,11 @@ mod tests {
     fn rejects_other_files() {
         assert_eq!(parse("{}").unwrap_err(), "setup.notASetupFile");
         assert_eq!(parse("not json").unwrap_err(), "setup.notASetupFile");
-        let other = "macos";
+        let other = if current_os() == "linux" {
+            "macos"
+        } else {
+            "linux"
+        };
         let text = format!(
             r#"{{"format":"suisha-setup","version":1,"os":"{other}","exportedAt":"x","packages":[]}}"#
         );

@@ -1,6 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 
-export type ManagerId = 'apt' | 'snap' | 'flatpak' | 'brew';
+export type ManagerId = 'apt' | 'snap' | 'flatpak' | 'brew' | 'brew-cask' | 'mas';
 
 export interface Package {
   manager: ManagerId;
@@ -26,10 +26,12 @@ export interface PackageRef {
 
 export interface AppInfo {
   version: string;
-  os: 'linux';
+  os: 'linux' | 'macos';
   managers: ManagerId[];
   helpers: boolean;
   autoUpdateAllowed: boolean;
+  /** "Update Suisha automatically" can be turned on here. */
+  selfUpdateAuto: boolean;
 }
 
 export interface StepOutcome {
@@ -79,8 +81,8 @@ export interface SelfUpdate {
   current: string;
   latest: string;
   available: boolean;
-  /** "apt": installed from the Suisha package, can update itself. */
-  channel: 'apt' | 'manual';
+  /** "apt" (Suisha package) or "brew" (Homebrew cask): Suisha can update itself. */
+  channel: 'apt' | 'brew' | 'manual';
   releasesUrl: string;
   /** The daily update of Suisha may run without a password. */
   autoAllowed: boolean;
@@ -108,9 +110,11 @@ export const MANAGER_LABELS: Record<ManagerId, string> = {
   snap: 'Snap',
   flatpak: 'Flatpak',
   brew: 'Homebrew',
+  'brew-cask': 'Homebrew Cask',
+  mas: 'Mac App Store',
 };
 
-export const MANAGER_ORDER: ManagerId[] = ['apt', 'snap', 'flatpak', 'brew'];
+export const MANAGER_ORDER: ManagerId[] = ['apt', 'snap', 'flatpak', 'brew', 'brew-cask', 'mas'];
 
 export function toRef(p: { manager: ManagerId; id: string; scope?: string; origin?: string; classic?: boolean }): PackageRef {
   return {

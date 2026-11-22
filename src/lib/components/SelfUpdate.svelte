@@ -2,7 +2,7 @@
   import { openUrl } from '@tauri-apps/plugin-opener';
   import { api, type SelfUpdate } from '$lib/api';
   import { t, tMessage } from '$lib/i18n.svelte';
-  import { app, op, runOp } from '$lib/state.svelte';
+  import { app, isMac, op, runOp } from '$lib/state.svelte';
 
   const CHECK_EVERY = 6 * 60 * 60 * 1000;
 
@@ -37,7 +37,7 @@
   });
 
   async function updateNow() {
-    const result = await runOp(t('self.updating'), () => api.updateSelf(), ['apt']);
+    const result = await runOp(t('self.updating'), () => api.updateSelf(), [isMac() ? 'brew-cask' : 'apt']);
     if (result?.success) installed = true;
   }
 
@@ -95,7 +95,7 @@
         </div>
       {:else if info?.available}
         <p>{t('self.available', { v: info.latest })} <span class="muted">{t('self.current', { v: info.current })}</span></p>
-        {#if info.channel === 'apt'}
+        {#if info.channel === 'apt' || info.channel === 'brew'}
           <div class="actions">
             <button class="link" onclick={() => openUrl(`${info!.releasesUrl}/tag/${info!.latest}`)}>
               {t('self.notes')}
@@ -106,7 +106,7 @@
             </button>
           </div>
         {:else}
-          <p class="small muted">{t('self.manual')}</p>
+          <p class="small muted">{isMac() ? t('self.manualMac') : t('self.manual')}</p>
           <div class="actions">
             <button class="primary" onclick={() => openUrl(`${info!.releasesUrl}/tag/${info!.latest}`)}>
               {t('self.download')}
@@ -123,15 +123,15 @@
         </div>
       {/if}
 
-      {#if app.info?.helpers}
+      {#if app.info?.selfUpdateAuto}
         <div class="auto">
           <label class="check">
             <input type="checkbox" checked={auto} disabled={switching} onchange={(e) => setAuto(e.currentTarget.checked)} />
             <strong>{t('self.auto')}</strong>
             {#if switching}<span class="spinner"></span>{/if}
           </label>
-          <p class="small muted">{t('self.autoText')}</p>
-          <p class="small muted">{t('self.viaApt')}</p>
+          <p class="small muted">{isMac() ? t('self.autoTextMac') : t('self.autoText')}</p>
+          <p class="small muted">{isMac() ? t('self.viaBrew') : t('self.viaApt')}</p>
         </div>
       {/if}
 

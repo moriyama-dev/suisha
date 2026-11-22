@@ -1,7 +1,7 @@
 <script lang="ts">
   import { api, MANAGER_LABELS, toRef, type ManagerId, type Package } from '$lib/api';
   import { t } from '$lib/i18n.svelte';
-  import { app, loadInstalled, managers, op, runOp } from '$lib/state.svelte';
+  import { app, isMac, loadInstalled, managers, op, runOp } from '$lib/state.svelte';
 
   let filter = $state('');
   let only = $state<ManagerId | 'all'>('all');
@@ -56,7 +56,7 @@
     {t('updates.check')}
   </button>
 </div>
-<p class="muted small">{t('installed.note')}</p>
+<p class="muted small">{isMac() ? t('installed.noteMac') : t('installed.note')}</p>
 
 {#if app.installedLoading && total === 0}
   <p class="muted pad"><span class="spinner"></span> {t('common.loading')}</p>
@@ -86,6 +86,9 @@
             {:else if p.name !== p.id}<div class="desc">{p.id}</div>{/if}
           </div>
           <span class="version">{p.version}</span>
+          {#if p.manager === 'mas'}
+            <span class="muted small" title={t('installed.masRemove')}>{t('installed.masRemoveShort')}</span>
+          {:else}
           <button
             class="danger"
             class:confirm={confirming === key(p)}
@@ -95,6 +98,7 @@
           >
             {confirming === key(p) ? t('installed.confirmRemove') : t('installed.remove')}
           </button>
+          {/if}
         </div>
       {/each}
     </div>

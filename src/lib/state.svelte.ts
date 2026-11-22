@@ -43,6 +43,15 @@ export function managers(): ManagerId[] {
   return MANAGER_ORDER.filter((m) => available.includes(m));
 }
 
+export function isMac(): boolean {
+  return app.info?.os === 'macos';
+}
+
+/** Managers automatic updates can include. App Store apps are left to the App Store's own setting. */
+export function autoManagers(): ManagerId[] {
+  return managers().filter((m) => m !== 'mas');
+}
+
 export async function loadInfo() {
   try {
     app.info = await api.appInfo();

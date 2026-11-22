@@ -25,8 +25,8 @@
 
   async function check() {
     if (op.running) return;
-    // `brew update` downloads fresh formula data; the others ask live.
-    if (managers().includes('brew')) {
+    // `brew update` downloads fresh formula and cask data; the others ask live.
+    if (managers().some((m) => m === 'brew' || m === 'brew-cask')) {
       await runOp(t('updates.check'), () => api.refresh(), []);
       op.result = null;
     } else {
@@ -102,6 +102,9 @@
     {#if g.error}
       <p class="notice error small">{t('common.error', { manager: MANAGER_LABELS[g.m], message: g.error })}</p>
     {/if}
+    {#if g.m === 'mas' && g.list.length}
+      <p class="muted small">{t('updates.masNote')}</p>
+    {/if}
     {#if g.list.length}
       <div class="list">
         {#each g.list as p (key(p))}
@@ -119,7 +122,9 @@
             <span class="version">
               {#if p.version}{`${p.version} → `}{/if}<strong>{p.newVersion}</strong>
             </span>
-            <button onclick={() => update([p])} disabled={op.running}>{t('updates.update')}</button>
+            <button onclick={() => update([p])} disabled={op.running}>
+              {p.manager === 'mas' ? t('updates.openAppStore') : t('updates.update')}
+            </button>
           </div>
         {/each}
       </div>

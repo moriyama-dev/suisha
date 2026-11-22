@@ -160,7 +160,7 @@
         <p class="notice error">{app.infoError}</p>
       {:else}
         {#if managers().length === 0}
-          <p class="notice warn">{t('common.noManagers')}</p>
+          <p class="notice warn">{app.info?.os === 'macos' ? t('common.noManagersMac') : t('common.noManagers')}</p>
         {/if}
         {#if view === 'updates'}<Updates />
         {:else if view === 'installed'}<Installed />

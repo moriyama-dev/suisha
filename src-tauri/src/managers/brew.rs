@@ -1,4 +1,4 @@
-//! Homebrew on Linux (formulae).
+//! Homebrew formulae and casks.
 
 use std::collections::HashMap;
 
@@ -7,7 +7,8 @@ use serde_json::Value;
 use super::text::lines;
 use crate::model::{ManagerId, Package};
 
-/// `brew list --formula --versions`: `name 1.2.3 1.2.4`
+/// `brew list --formula --versions` / `brew list --cask --versions`:
+/// `name 1.2.3 1.2.4`
 pub fn parse_versions(out: &str) -> HashMap<String, String> {
     lines(out)
         .filter_map(|l| {
@@ -38,6 +39,19 @@ pub fn formulae_from(leaves: &str, versions: &str) -> Vec<Package> {
     list
 }
 
+pub fn casks_from(versions: &str) -> Vec<Package> {
+    let mut list: Vec<Package> = parse_versions(versions)
+        .into_iter()
+        .map(|(name, version)| {
+            let mut p = Package::new(ManagerId::BrewCask, name);
+            p.version = version;
+            p
+        })
+        .collect();
+    list.sort_by(|a, b| a.id.cmp(&b.id));
+    list
+}
+
 fn version_text(v: Option<&Value>) -> String {
     match v {
         Some(Value::String(s)) => s.clone(),
@@ -51,37 +65,40 @@ fn version_text(v: Option<&Value>) -> String {
     }
 }
 
-/// `brew outdated --formula --json=v2`
+/// `brew outdated --json=v2`
 pub fn parse_outdated(out: &str) -> Vec<Package> {
     let Ok(json) = serde_json::from_str::<Value>(out) else {
         return Vec::new();
     };
     let mut list = Vec::new();
-    for item in json
-        .get("formulae")
-        .and_then(|v| v.as_array())
-        .into_iter()
-        .flatten()
-    {
-        let Some(name) = item.get("name").and_then(|v| v.as_str()) else {
+    for (key, manager) in [
+        ("formulae", ManagerId::Brew),
+        ("casks", ManagerId::BrewCask),
+    ] {
+        let Some(items) = json.get(key).and_then(|v| v.as_array()) else {
             continue;
         };
-        let mut p = Package::new(ManagerId::Brew, name);
-        p.version = version_text(item.get("installed_versions"));
-        p.new_version = version_text(item.get("current_version"));
-        list.push(p);
+        for item in items {
+            let Some(name) = item.get("name").and_then(|v| v.as_str()) else {
+                continue;
+            };
+            let mut p = Package::new(manager, name);
+            p.version = version_text(item.get("installed_versions"));
+            p.new_version = version_text(item.get("current_version"));
+            list.push(p);
+        }
     }
     list
 }
 
-/// `brew search --formula <q>`: one name per line. Installed entries carry a
-/// check mark.
-pub fn parse_search(out: &str) -> Vec<Package> {
+/// `brew search --formula <q>` / `brew search --cask <q>`: one name per line.
+/// Installed entries carry a check mark.
+pub fn parse_search(out: &str, manager: ManagerId) -> Vec<Package> {
     lines(out)
         .map(|l| l.trim().trim_end_matches('✔').trim())
         .filter(|l| !l.starts_with("==>") && !l.contains(' '))
         .filter(|l| !l.is_empty())
-        .map(|name| Package::new(ManagerId::Brew, name))
+        .map(|name| Package::new(manager, name))
         .collect()
 }
 
@@ -90,7 +107,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn formulae() {
+    fn formulae_and_casks() {
         let leaves = "gh\nnode@20\nhomebrew/core/wget\n";
         let versions = "gh 2.62.0\nnode@20 20.18.1\nwget 1.24.5\nopenssl@3 3.4.0\n";
         let list = formulae_from(leaves, versions);
@@ -98,27 +115,32 @@ mod tests {
         assert_eq!(names, vec!["gh", "node@20", "wget"]);
         assert_eq!(list[2].id, "homebrew/core/wget");
         assert_eq!(list[2].version, "1.24.5");
+
+        let casks = casks_from("firefox 133.0\nvisual-studio-code 1.95.3\n");
+        assert_eq!(casks[1].id, "visual-studio-code");
+        assert_eq!(casks[1].manager, Some(ManagerId::BrewCask));
     }
 
     #[test]
     fn outdated() {
-        let out = r#"{"formulae":[{"name":"gh","installed_versions":["2.61.0"],"current_version":"2.62.0","pinned":false},
-                                   {"name":"old","installed_versions":"1.0","current_version":"2.0"}],
-                      "casks":[]}"#;
+        let out = r#"{"formulae":[{"name":"gh","installed_versions":["2.61.0"],"current_version":"2.62.0","pinned":false}],
+                      "casks":[{"name":"firefox","installed_versions":["132.0"],"current_version":"133.0"},
+                               {"name":"old","installed_versions":"1.0","current_version":"2.0"}]}"#;
         let list = parse_outdated(out);
-        assert_eq!(list.len(), 2);
+        assert_eq!(list.len(), 3);
+        assert_eq!(list[0].manager, Some(ManagerId::Brew));
         assert_eq!(list[0].version, "2.61.0");
-        assert_eq!(list[0].new_version, "2.62.0");
-        assert_eq!(list[1].version, "1.0");
+        assert_eq!(list[1].new_version, "133.0");
+        assert_eq!(list[2].version, "1.0");
         assert!(parse_outdated("not json").is_empty());
     }
 
     #[test]
     fn search() {
         let out = "==> Formulae\nwget ✔\nwget2\n\n";
-        let list = parse_search(out);
+        let list = parse_search(out, ManagerId::Brew);
         let names: Vec<_> = list.iter().map(|p| p.id.as_str()).collect();
         assert_eq!(names, vec!["wget", "wget2"]);
-        assert!(parse_search("No formulae or casks found for \"zz\".").is_empty());
+        assert!(parse_search("No formulae or casks found for \"zz\".", ManagerId::Brew).is_empty());
     }
 }
