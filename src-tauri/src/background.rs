@@ -287,6 +287,11 @@ pub fn self_check() -> i32 {
             "flathubMissing": system.flathub_missing,
         }),
     );
+    // How this copy would update itself; needs no network.
+    report.insert(
+        "selfUpdateChannel".into(),
+        crate::self_update::channel().into(),
+    );
     // Needs the network too, so it is reported without failing the check.
     report.insert(
         "selfUpdate".into(),

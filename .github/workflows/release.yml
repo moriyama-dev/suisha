@@ -243,5 +243,8 @@ jobs:
             exit 1
           fi
           /Applications/Suisha.app/Contents/MacOS/suisha --version | grep -F "suisha ${RELEASE_VERSION}"
-          brew list --cask --versions moriyama-dev/suisha/suisha
+          brew list --cask --versions suisha
+          # Installed with Homebrew, Suisha must find that it can update itself.
+          /Applications/Suisha.app/Contents/MacOS/suisha --self-check | tee "${RUNNER_TEMP}/self-check.json"
+          grep -F '"selfUpdateChannel": "brew"' "${RUNNER_TEMP}/self-check.json"
           brew uninstall --cask moriyama-dev/suisha/suisha

@@ -18,8 +18,10 @@ use crate::privileged::{self, Helper};
 
 pub const RELEASES_URL: &str = "https://github.com/moriyama-dev/suisha/releases";
 const LATEST_API: &str = "https://api.github.com/repos/moriyama-dev/suisha/releases/latest";
-/// The cask in Suisha's own Homebrew tap.
+/// The cask in Suisha's own Homebrew tap, for `brew upgrade`.
 pub const CASK: &str = "moriyama-dev/suisha/suisha";
+/// The same cask for `brew list`, which does not accept the tap prefix.
+const CASK_NAME: &str = "suisha";
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -76,8 +78,14 @@ fn latest_release() -> Result<String, String> {
 }
 
 fn brew_cask_installed() -> bool {
-    find_bin("brew")
-        .is_some_and(|brew| run(&brew, &["list", "--cask", CASK], Duration::from_secs(60)).success)
+    find_bin("brew").is_some_and(|brew| {
+        run(
+            &brew,
+            &["list", "--cask", CASK_NAME],
+            Duration::from_secs(60),
+        )
+        .success
+    })
 }
 
 /// Whether this copy came from the Suisha package (Linux) or the Homebrew
@@ -172,7 +180,7 @@ pub fn installed_version() -> String {
                 parse_cask_version(
                     &run(
                         &brew,
-                        &["list", "--cask", "--versions", CASK],
+                        &["list", "--cask", "--versions", CASK_NAME],
                         Duration::from_secs(60),
                     )
                     .stdout,

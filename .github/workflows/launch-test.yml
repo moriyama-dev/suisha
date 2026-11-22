@@ -82,6 +82,21 @@ jobs:
         run: scripts/launch-test.sh src-tauri/target/universal-apple-darwin/release/bundle/macos/Suisha.app/Contents/MacOS/suisha
       - name: Check the scheduled jobs and the notification
         run: scripts/macos-schedule-test.sh src-tauri/target/universal-apple-darwin/release/bundle/macos/Suisha.app/Contents/MacOS/suisha
+      # The published cask, with this build put in its place: Suisha must find
+      # that it was installed with Homebrew and can update itself.
+      - name: Check updating through Homebrew
+        env:
+          REPO_URL: ${{ github.server_url }}/${{ github.repository }}
+        run: |
+          brew tap moriyama-dev/suisha "${REPO_URL}"
+          brew install --cask moriyama-dev/suisha/suisha
+          brew list --cask suisha
+          brew list --cask --versions suisha
+          rm -rf /Applications/Suisha.app
+          cp -R src-tauri/target/universal-apple-darwin/release/bundle/macos/Suisha.app /Applications/
+          /Applications/Suisha.app/Contents/MacOS/suisha --self-check | tee "${RUNNER_TEMP}/self-check.json"
+          grep -F '"selfUpdateChannel": "brew"' "${RUNNER_TEMP}/self-check.json"
+          brew uninstall --cask moriyama-dev/suisha/suisha
       - name: Show the app
         run: |
           lipo -info src-tauri/target/universal-apple-darwin/release/bundle/macos/Suisha.app/Contents/MacOS/suisha
