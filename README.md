@@ -81,7 +81,7 @@ sudo apt install suisha
 Download `suisha-<version>-linux-amd64.deb` from the [Releases](https://github.com/moriyama-dev/suisha/releases) page and run:
 
 ```sh
-sudo apt install ./suisha-0.5.1-linux-amd64.deb
+sudo apt install ./suisha-0.5.2-linux-amd64.deb
 ```
 
 Either way, Suisha is updated from then on: the package adds Suisha's apt repository (`/etc/apt/sources.list.d/suisha.list`) if it is not there yet.
