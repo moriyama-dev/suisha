@@ -40,6 +40,7 @@ macOS 13 Ventura 以降に対応しています。Apple シリコンの Mac で�
 **Homebrew で入れる（おすすめ。以後は Suisha が自分で最新に保ちます）**
 
 ```sh
+brew tap moriyama-dev/suisha https://github.com/moriyama-dev/suisha
 brew install --cask moriyama-dev/suisha/suisha
 ```
 

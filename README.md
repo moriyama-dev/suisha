@@ -40,6 +40,7 @@ macOS 13 Ventura or later, on Apple silicon or Intel.
 **With Homebrew (recommended: Suisha then keeps itself up to date)**
 
 ```sh
+brew tap moriyama-dev/suisha https://github.com/moriyama-dev/suisha
 brew install --cask moriyama-dev/suisha/suisha
 ```
 
