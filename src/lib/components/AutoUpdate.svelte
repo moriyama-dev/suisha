@@ -16,7 +16,9 @@
   const lastRun = $derived(lastRunTime ? formatTime(lastRunTime) : '');
 
   const a = $derived(app.settings?.autoUpdate);
-  const next = $derived(a ? nextRun(a) : null);
+  // Ticks so that "Next" moves on once its time has passed.
+  let now = $state(Date.now());
+  const next = $derived(a ? nextRun(a, new Date(now)) : null);
   const admin = $derived(needsAdminAccess());
   const allowed = $derived(!!app.info?.autoUpdateAllowed);
   // The password dialog appears on save when apt or snap is included and not yet allowed.
@@ -61,6 +63,23 @@
   onMount(async () => {
     if (!app.settings) await loadSettings();
     await loadLastRun();
+  });
+
+  // Scheduled runs happen while the window stays open too: keep "Next" and
+  // "Last run" current, and catch up when the window comes back to the front.
+  $effect(() => {
+    const refresh = () => {
+      now = Date.now();
+      loadLastRun().catch(() => {});
+    };
+    const tick = setInterval(() => (now = Date.now()), 60 * 1000);
+    const reread = setInterval(refresh, 5 * 60 * 1000);
+    window.addEventListener('focus', refresh);
+    return () => {
+      clearInterval(tick);
+      clearInterval(reread);
+      window.removeEventListener('focus', refresh);
+    };
   });
 
   let panel = $state<HTMLElement | null>(null);
@@ -166,6 +185,7 @@
           {#if next && lastRun} · {/if}
           {#if lastRun}{t('auto.lastRun', { time: lastRun })}{/if}
         </p>
+        <p class="muted small">{t('auto.closeOk')}</p>
       {:else}
         <p class="muted">{t('auto.heroOff')}</p>
       {/if}

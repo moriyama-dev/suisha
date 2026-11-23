@@ -83,6 +83,7 @@ const en = {
   'auto.passwordNext':
     'When you press the button below, the system asks for your password. Enter it so that apt and snap can be updated automatically.',
   'auto.sidebar': 'Automatic updates',
+  'auto.closeOk': 'You can close this window. Suisha still updates in the background at these times.',
 
   'installed.title': 'Installed',
   'installed.filter': 'Filter by name',
@@ -321,6 +322,7 @@ const ja: Record<Key, string> = {
   'auto.passwordNext':
     '下のボタンを押すと、パスワードの入力画面が出ます。apt と snap を自動で更新できるように、入力してください。',
   'auto.sidebar': '自動更新',
+  'auto.closeOk': 'この画面は閉じてかまいません。閉じていても、決めた時刻に Suisha が裏で更新します。',
 
   'installed.title': 'インストール済み',
   'installed.filter': '名前で絞り込む',
