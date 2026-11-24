@@ -1,7 +1,8 @@
 #!/bin/sh
 # Updates Suisha itself from its apt repository. Takes no arguments.
-# Run through pkexec (polkit action dev.moriyama.suisha.self-update). Users
-# who turned on "update Suisha automatically" may run it without a password.
+# Run through pkexec (polkit action dev.moriyama.suisha.self-update) or sudo.
+# Users who turned on "update Suisha automatically" may run it without a
+# password.
 set -u
 export PATH=/usr/sbin:/usr/bin:/sbin:/bin
 export DEBIAN_FRONTEND=noninteractive
@@ -18,10 +19,11 @@ if [ ! -f "$list" ]; then
     exit 1
 fi
 
-# Refresh only Suisha's own source, then upgrade only Suisha.
+# Refresh only Suisha's own source, then upgrade only Suisha: the command
+# (suisha-cli) and, where it is installed, the window (suisha).
 apt-get -o DPkg::Lock::Timeout=300 \
     -o Dir::Etc::sourcelist="$list" -o Dir::Etc::sourceparts=- \
     -o APT::Get::List-Cleanup=0 update || exit 1
-exec apt-get -y -o DPkg::Lock::Timeout=300 \
+exec apt-get -y -o Dpkg::Use-Pty=0 -o DPkg::Lock::Timeout=300 \
     -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold \
-    install --only-upgrade suisha
+    install --only-upgrade suisha-cli suisha

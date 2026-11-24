@@ -123,8 +123,8 @@ pub fn auto_update() -> i32 {
         .filter(|m| *m != ManagerId::Mas)
         .collect();
 
-    // apt and snap only when the user allowed password-less updates;
-    // a timer has nobody to type a password.
+    // apt and snap only when the user allowed password-less updates (root
+    // needs no permission); a timer has nobody to type a password.
     let include_admin = privileged::helpers_installed() && privileged::auto_update_allowed();
 
     let skipped_admin: Vec<ManagerId> = if include_admin {
@@ -171,6 +171,12 @@ pub fn auto_update() -> i32 {
     });
     let after = pending(&chosen);
     let installed = before.difference(&after).count();
+    // For the journal (`journalctl --user -u suisha-auto-update`).
+    if result.success {
+        println!("suisha: {installed} updates installed");
+    } else {
+        eprintln!("suisha: some updates failed; see `suisha history`");
+    }
 
     if a.notify {
         let t = texts(&settings.language);
@@ -207,7 +213,7 @@ pub fn self_update() -> i32 {
         eprintln!("suisha: updating itself without a password is not allowed");
         return 0;
     }
-    let steps = match crate::self_update::update_steps() {
+    let steps = match crate::self_update::update_steps(false) {
         Ok(s) => s,
         Err(e) => {
             eprintln!("suisha: {e}");
@@ -260,7 +266,7 @@ pub fn self_update() -> i32 {
 /// Print what Suisha can see, as JSON. Used by the release checks.
 pub fn self_check() -> i32 {
     let mut report = serde_json::Map::new();
-    report.insert("version".into(), env!("CARGO_PKG_VERSION").into());
+    report.insert("version".into(), crate::VERSION.into());
     report.insert("os".into(), crate::setup_file::current_os().into());
     let mut ok = true;
     for m in managers::available() {

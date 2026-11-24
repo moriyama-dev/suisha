@@ -1,0 +1,25 @@
+[workspace]
+resolver = "3"
+members = ["crates/core", "crates/cli", "src-tauri"]
+
+[workspace.package]
+version = "0.5.2"
+authors = ["Yoshiro Moriyama <7315004+moriyama-dev@users.noreply.github.com>"]
+license = "MIT"
+repository = "https://github.com/moriyama-dev/suisha"
+edition = "2024"
+
+[workspace.dependencies]
+suisha-core = { path = "crates/core" }
+suisha-cli = { path = "crates/cli" }
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = 3
+panic = "abort"
+strip = true

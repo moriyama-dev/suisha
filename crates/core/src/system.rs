@@ -54,6 +54,14 @@ pub fn has_flathub(remotes: &str) -> bool {
     remotes.lines().any(|l| l.trim() == "flathub")
 }
 
+/// Whether a desktop is there to show a window or a browser.
+pub fn has_display() -> bool {
+    cfg!(target_os = "macos")
+        || ["DISPLAY", "WAYLAND_DISPLAY"]
+            .iter()
+            .any(|v| std::env::var_os(v).is_some_and(|d| !d.is_empty()))
+}
+
 pub fn status() -> SystemStatus {
     let mut s = SystemStatus {
         restart_required: fs::metadata(REBOOT_FLAG).is_ok(),

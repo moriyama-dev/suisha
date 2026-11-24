@@ -4,11 +4,15 @@
 //! `suisha --self-update`) at the chosen times.
 
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use crate::exec::{find_bin, run, run_with_env};
-use crate::store::{AutoUpdate, Frequency};
+use crate::managers;
+use crate::model::ManagerId;
+use crate::privileged;
+use crate::self_update;
+use crate::store::{self, AutoUpdate, Frequency, Settings};
 
 const AUTO_UNIT: &str = "suisha-auto-update";
 const SELF_UNIT: &str = "suisha-self-update";
@@ -21,7 +25,19 @@ pub fn program_path() -> Result<PathBuf, String> {
     if let Some(appimage) = std::env::var_os("APPIMAGE") {
         return Ok(PathBuf::from(appimage));
     }
-    std::env::current_exe().map_err(|e| e.to_string())
+    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+    Ok(command_next_to(&exe).unwrap_or(exe))
+}
+
+/// On Linux the window is `suisha-gui`, and the `suisha` command is
+/// installed next to it. Timers start the command: it does the same work
+/// and does not load the libraries a window needs.
+fn command_next_to(exe: &Path) -> Option<PathBuf> {
+    if exe.file_name()? != "suisha-gui" {
+        return None;
+    }
+    let command = exe.with_file_name("suisha");
+    command.is_file().then_some(command)
 }
 
 const DAYS: [&str; 7] = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -169,28 +185,116 @@ fn systemd_dir() -> PathBuf {
         .join("systemd/user")
 }
 
-fn systemctl(args: &[&str]) -> Result<(), String> {
+/// Run `systemctl --user` and return what it printed.
+fn systemctl(args: &[&str]) -> Result<String, String> {
     let systemctl = find_bin("systemctl").ok_or("systemctl was not found")?;
     let mut full = vec!["--user"];
     full.extend_from_slice(args);
+    // Times are printed in UTC, so that they can be read back whatever the
+    // time zone is called here.
+    let mut envs = vec![("TZ", "UTC".to_string())];
     // Talk to the user's own systemd through its standard bus, even when the
     // app was started with a different session bus.
-    let mut envs = Vec::new();
-    let runtime = std::env::var_os("XDG_RUNTIME_DIR")
-        .map(PathBuf::from)
-        .or_else(|| {
-            use std::os::unix::fs::MetadataExt;
-            let uid = fs::metadata("/proc/self").ok()?.uid();
-            Some(PathBuf::from(format!("/run/user/{uid}")))
-        });
-    if let Some(bus) = runtime.map(|r| r.join("bus")).filter(|b| b.exists()) {
+    if let Some(bus) = user_bus().filter(|b| b.exists()) {
         envs.push((
             "DBUS_SESSION_BUS_ADDRESS",
             format!("unix:path={}", bus.display()),
         ));
     }
     let out = run_with_env(&systemctl, &full, &envs, Duration::from_secs(30));
-    if out.success { Ok(()) } else { Err(out.tail()) }
+    if out.success {
+        Ok(out.stdout)
+    } else if out.stderr.contains("Failed to connect to bus") {
+        // A shell from `su` or `sudo -i`, or a container without a login.
+        Err(
+            "systemd is not running for this user, so there is nothing to keep the timer. \
+             Log in as this user (for example over SSH) and try again, or first run: \
+             sudo loginctl enable-linger \"$USER\""
+                .into(),
+        )
+    } else {
+        Err(out.tail())
+    }
+}
+
+/// The socket of this user's own systemd and D-Bus.
+fn user_bus() -> Option<PathBuf> {
+    let runtime = std::env::var_os("XDG_RUNTIME_DIR")
+        .filter(|dir| !dir.is_empty())
+        .map(PathBuf::from)
+        .unwrap_or_else(|| {
+            let uid = rustix::process::getuid().as_raw();
+            PathBuf::from(format!("/run/user/{uid}"))
+        });
+    Some(runtime.join("bus"))
+}
+
+/// After lingering was turned on for a user without a login session,
+/// systemd starts for that user; wait until it answers.
+pub fn wait_for_user_systemd() {
+    let Some(bus) = user_bus() else { return };
+    for _ in 0..50 {
+        if bus.exists() {
+            return;
+        }
+        std::thread::sleep(Duration::from_millis(100));
+    }
+}
+
+/// `systemctl show --property=NextElapseUSecRealtime` with `TZ=UTC`:
+/// `NextElapseUSecRealtime=Wed 2026-11-25 03:02:02 UTC`, in seconds since
+/// 1970. The value is empty while the timer is not waiting for anything.
+pub fn parse_next_run(text: &str) -> Option<i64> {
+    let value = text
+        .lines()
+        .find_map(|l| l.strip_prefix("NextElapseUSecRealtime="))?;
+    let mut words = value.split_whitespace();
+    let (_day, date, time, zone) = (words.next()?, words.next()?, words.next()?, words.next()?);
+    if zone != "UTC" {
+        return None;
+    }
+    chrono::NaiveDateTime::parse_from_str(&format!("{date} {time}"), "%Y-%m-%d %H:%M:%S")
+        .ok()
+        .map(|t| t.and_utc().timestamp())
+}
+
+/// When the automatic update timer runs next, in seconds since 1970
+/// (Linux; `None` where systemd does not say).
+pub fn next_run() -> Option<i64> {
+    if cfg!(target_os = "macos") {
+        return None;
+    }
+    systemctl(&[
+        "show",
+        &format!("{AUTO_UNIT}.timer"),
+        "--property=NextElapseUSecRealtime",
+    ])
+    .ok()
+    .and_then(|text| parse_next_run(&text))
+}
+
+/// Whether this user's timers also run while the user is logged out
+/// (`loginctl enable-linger`). `None` when the system does not say, and on
+/// macOS, where launchd agents belong to the login session.
+pub fn linger() -> Option<bool> {
+    if cfg!(target_os = "macos") {
+        return None;
+    }
+    let loginctl = find_bin("loginctl")?;
+    let uid = rustix::process::getuid().as_raw().to_string();
+    let out = run(
+        &loginctl,
+        &["show-user", &uid, "--property=Linger", "--value"],
+        Duration::from_secs(20),
+    );
+    match out.stdout.trim() {
+        "yes" if out.success => Some(true),
+        "no" if out.success => Some(false),
+        // systemd knows nothing about a user who has no login session:
+        // "User ID 0 is not logged in or lingering".
+        _ if out.stderr.contains("not logged in or lingering") => Some(false),
+        _ => None,
+    }
 }
 
 fn launch_agent_path(label: &str) -> PathBuf {
@@ -339,9 +443,100 @@ pub fn apply_self_update(enabled: bool) -> Result<(), String> {
     set_timer(SELF_UNIT, units)
 }
 
+/// Save the automatic update settings and make the timer match them.
+///
+/// Turning automatic updates on for apt or snap asks once for the password,
+/// so that later runs need none. The second value is a message key for
+/// something the person should be told (the settings are saved all the same).
+pub fn save_auto_update(settings: Settings) -> Result<(Settings, Option<String>), String> {
+    if !settings.auto_update.is_valid() {
+        return Err("Invalid time".into());
+    }
+    let previous = store::load_settings();
+    let mut warning = None;
+
+    let a = &settings.auto_update;
+    let wants_admin = [ManagerId::Apt, ManagerId::Snap].iter().any(|m| {
+        managers::binary(*m).is_some() && (a.managers.is_empty() || a.managers.contains(m))
+    });
+    let turning_on = a.enabled && wants_admin;
+    let turning_off = !a.enabled && previous.auto_update.enabled;
+    if turning_on && !privileged::auto_update_allowed() {
+        if !privileged::helpers_installed() {
+            warning = Some("auto.noHelpers".into());
+        } else if let Err(e) = privileged::set_auto_update_access(true) {
+            warning = Some(if e == "cancelled" {
+                "auto.accessCancelled".into()
+            } else {
+                format!("auto.accessFailed:{e}")
+            });
+        }
+    } else if turning_off && privileged::auto_update_allowed() {
+        // Taking the permission back is optional; dismissing the
+        // dialog leaves it in place, and the timer is gone anyway.
+        let _ = privileged::set_auto_update_access(false);
+    }
+
+    apply(&settings.auto_update)?;
+    // Only the schedule is edited here; keep what this does not know about.
+    let settings = Settings {
+        self_update_auto: previous.self_update_auto,
+        ..settings
+    };
+    store::save_settings(&settings)?;
+    Ok((settings, warning))
+}
+
+/// Turn the daily update of Suisha itself on or off. Turning it on asks for
+/// the password once, unless that was done before.
+pub fn save_self_update(enabled: bool) -> Result<Settings, String> {
+    if enabled && cfg!(target_os = "macos") {
+        if self_update::channel() != "brew" {
+            return Err("self.noBrew".into());
+        }
+    } else if enabled {
+        if !privileged::helpers_installed() {
+            return Err("auto.noHelpers".into());
+        }
+        if !privileged::allowed(privileged::Helper::SelfUpdate) {
+            privileged::set_access(privileged::Helper::SelfUpdate, true)?;
+        }
+    }
+    apply_self_update(enabled)?;
+    let mut settings = store::load_settings();
+    settings.self_update_auto = enabled;
+    store::save_settings(&settings)?;
+    Ok(settings)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn timers_start_the_command_not_the_window() {
+        let dir = std::env::temp_dir().join(format!("suisha-test-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let window = dir.join("suisha-gui");
+        // Without the command next to it, the window starts itself.
+        assert_eq!(command_next_to(&window), None);
+        fs::write(dir.join("suisha"), "").unwrap();
+        assert_eq!(command_next_to(&window), Some(dir.join("suisha")));
+        assert_eq!(command_next_to(&dir.join("suisha")), None);
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn next_run_from_systemctl() {
+        let text = "NextElapseUSecRealtime=Wed 2026-11-25 03:02:02 UTC\n";
+        assert_eq!(parse_next_run(text), Some(1795575722));
+        // A stopped timer has nothing coming up.
+        assert_eq!(parse_next_run("NextElapseUSecRealtime=\n"), None);
+        assert_eq!(parse_next_run(""), None);
+        // Only the format asked for is trusted.
+        let local = "NextElapseUSecRealtime=Wed 2026-11-25 03:02:02 EST\n";
+        assert_eq!(parse_next_run(local), None);
+    }
 
     #[test]
     fn calendars() {

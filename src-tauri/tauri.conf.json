@@ -44,22 +44,13 @@
     "linux": {
       "deb": {
         "depends": [
+          "suisha-cli (>= 0.6.0)",
           "pkexec | policykit-1"
         ],
         "recommends": [
           "libnotify-bin"
         ],
-        "section": "admin",
-        "files": {
-          "/usr/lib/suisha/suisha-root": "linux/suisha-root",
-          "/usr/lib/suisha/suisha-auto-update": "linux/suisha-auto-update",
-          "/usr/lib/suisha/suisha-auto-update-access": "linux/suisha-auto-update-access",
-          "/usr/share/polkit-1/actions/dev.moriyama.suisha.policy": "linux/dev.moriyama.suisha.policy",
-          "/usr/lib/suisha/suisha-self-update": "linux/suisha-self-update",
-          "/usr/share/keyrings/suisha-archive-keyring.asc": "linux/suisha-archive-keyring.asc"
-        },
-        "postInstallScript": "linux/postinst",
-        "postRemoveScript": "linux/postrm"
+        "section": "admin"
       }
     },
     "macOS": {

@@ -30,22 +30,32 @@ jobs:
       - name: Checks and unit tests
         run: |
           npm run check
-          cd src-tauri && cargo test --locked
+          cargo test --locked --workspace
       - name: Check the root helpers
         run: |
-          sh -n src-tauri/linux/suisha-root
-          sh -n src-tauri/linux/suisha-auto-update
-          sh -n src-tauri/linux/suisha-self-update
-          sh -n src-tauri/linux/suisha-auto-update-access
-          shellcheck src-tauri/linux/suisha-root src-tauri/linux/suisha-auto-update src-tauri/linux/suisha-self-update src-tauri/linux/suisha-auto-update-access src-tauri/linux/postinst src-tauri/linux/postrm scripts/launch-test.sh
-      - name: Build the .deb
-        run: npm run tauri build -- --bundles deb
+          cd packaging/linux
+          for f in suisha-root suisha-auto-update suisha-self-update suisha-auto-update-access postinst postrm; do sh -n "${f}"; done
+          shellcheck suisha-root suisha-auto-update suisha-self-update suisha-auto-update-access postinst postrm \
+            ../../scripts/launch-test.sh ../../scripts/cli-test.sh ../../scripts/build-cli-deb.sh
+      # Two packages: the window (suisha) and the command it is built on
+      # (suisha-cli), which servers install on its own
+      - name: Build the packages
+        run: |
+          npm run tauri build -- --bundles deb
+          cargo build --release --locked -p suisha-cli
+          scripts/build-cli-deb.sh
       - name: Launch the app
-        run: xvfb-run -a dbus-run-session -- scripts/launch-test.sh src-tauri/target/release/suisha
+        run: xvfb-run -a dbus-run-session -- scripts/launch-test.sh target/release/suisha-gui
+      - name: Install the packages and use the command
+        run: |
+          sudo apt-get install -y ./target/release/bundle/deb/suisha-cli_*.deb ./target/release/bundle/deb/Suisha_*.deb
+          scripts/cli-test.sh "$( jq -r .version src-tauri/tauri.conf.json )"
       - name: Show the package
         run: |
-          dpkg-deb --info src-tauri/target/release/bundle/deb/*.deb
-          dpkg-deb --contents src-tauri/target/release/bundle/deb/*.deb
+          for f in target/release/bundle/deb/*.deb; do
+            dpkg-deb --info "${f}"
+            dpkg-deb --contents "${f}"
+          done
 
   macos:
     runs-on: macos-15
@@ -66,7 +76,7 @@ jobs:
       - name: Checks and unit tests
         run: |
           npm run check
-          cd src-tauri && cargo test --locked
+          cargo test --locked --workspace
       - name: Check the cask
         run: |
           ruby -c Casks/suisha.rb
@@ -75,13 +85,13 @@ jobs:
         run: npm run tauri build -- --target universal-apple-darwin --bundles app,dmg
       # An invalid signature only shows up as a crash at launch, so check it here
       - name: Verify the signature
-        run: codesign --verify --deep --strict --verbose=2 src-tauri/target/universal-apple-darwin/release/bundle/macos/Suisha.app
+        run: codesign --verify --deep --strict --verbose=2 target/universal-apple-darwin/release/bundle/macos/Suisha.app
       - name: Install mas for the launch test
         run: brew install mas
       - name: Launch the app
-        run: scripts/launch-test.sh src-tauri/target/universal-apple-darwin/release/bundle/macos/Suisha.app/Contents/MacOS/suisha
+        run: scripts/launch-test.sh target/universal-apple-darwin/release/bundle/macos/Suisha.app/Contents/MacOS/suisha
       - name: Check the scheduled jobs and the notification
-        run: scripts/macos-schedule-test.sh src-tauri/target/universal-apple-darwin/release/bundle/macos/Suisha.app/Contents/MacOS/suisha
+        run: scripts/macos-schedule-test.sh target/universal-apple-darwin/release/bundle/macos/Suisha.app/Contents/MacOS/suisha
       # The published cask, with this build put in its place: Suisha must find
       # that it was installed with Homebrew and can update itself.
       - name: Check updating through Homebrew
@@ -93,12 +103,12 @@ jobs:
           brew list --cask suisha
           brew list --cask --versions suisha
           rm -rf /Applications/Suisha.app
-          cp -R src-tauri/target/universal-apple-darwin/release/bundle/macos/Suisha.app /Applications/
+          cp -R target/universal-apple-darwin/release/bundle/macos/Suisha.app /Applications/
           /Applications/Suisha.app/Contents/MacOS/suisha --self-check | tee "${RUNNER_TEMP}/self-check.json"
           grep -F '"selfUpdateChannel": "brew"' "${RUNNER_TEMP}/self-check.json"
           brew uninstall --cask moriyama-dev/suisha/suisha
       - name: Show the app
         run: |
-          lipo -info src-tauri/target/universal-apple-darwin/release/bundle/macos/Suisha.app/Contents/MacOS/suisha
-          plutil -p src-tauri/target/universal-apple-darwin/release/bundle/macos/Suisha.app/Contents/Info.plist
-          ls -la src-tauri/target/universal-apple-darwin/release/bundle/dmg
+          lipo -info target/universal-apple-darwin/release/bundle/macos/Suisha.app/Contents/MacOS/suisha
+          plutil -p target/universal-apple-darwin/release/bundle/macos/Suisha.app/Contents/Info.plist
+          ls -la target/universal-apple-darwin/release/bundle/dmg

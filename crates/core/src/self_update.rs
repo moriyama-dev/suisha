@@ -1,6 +1,6 @@
 //! Keeping Suisha itself up to date.
 //!
-//! On Linux the Suisha package registers its own apt repository, and on macOS
+//! On Linux the suisha-cli package registers its own apt repository, and on macOS
 //! Suisha is a Homebrew cask, so Suisha is updated together with everything
 //! else. On top of that, this module finds out whether a newer release exists
 //! (for the notice in the window) and updates Suisha on its own: right away
@@ -29,7 +29,7 @@ pub struct SelfUpdate {
     pub current: String,
     pub latest: String,
     pub available: bool,
-    /// "apt" (installed from the Suisha package: can update itself), "brew"
+    /// "apt" (installed from the Suisha packages: can update itself), "brew"
     /// (installed with Homebrew on macOS: can update itself) or "manual" (a
     /// downloaded disk image or a development build).
     pub channel: String,
@@ -100,7 +100,10 @@ pub fn channel() -> &'static str {
             "manual"
         };
     }
-    let packaged = std::env::current_exe().is_ok_and(|exe| exe == Path::new("/usr/bin/suisha"));
+    // The command (`suisha`) and the window (`suisha-gui`) come from packages.
+    let packaged = std::env::current_exe().is_ok_and(|exe| {
+        exe == Path::new("/usr/bin/suisha") || exe == Path::new("/usr/bin/suisha-gui")
+    });
     if packaged && privileged::helpers_installed() {
         "apt"
     } else {
@@ -140,8 +143,9 @@ pub fn auto_supported() -> bool {
     }
 }
 
-/// The command that updates Suisha now.
-pub fn update_steps() -> Result<Vec<Step>, String> {
+/// The command that updates Suisha now. `attended` says whether someone can
+/// type a password.
+pub fn update_steps(attended: bool) -> Result<Vec<Step>, String> {
     if cfg!(target_os = "macos") {
         let brew = find_bin("brew").ok_or("brew was not found")?;
         return Ok(vec![
@@ -159,7 +163,7 @@ pub fn update_steps() -> Result<Vec<Step>, String> {
             },
         ]);
     }
-    Ok(vec![privileged::self_update_step()?])
+    Ok(vec![privileged::self_update_step(attended)?])
 }
 
 /// `brew list --cask --versions <cask>`: `suisha 0.5.0`
@@ -188,11 +192,12 @@ pub fn installed_version() -> String {
             })
             .unwrap_or_default();
     }
+    // Every installation has the suisha-cli package; the window is optional.
     find_bin("dpkg-query")
         .map(|dpkg_query| {
             run(
                 &dpkg_query,
-                &["-W", "-f", "${Version}", "suisha"],
+                &["-W", "-f", "${Version}", "suisha-cli"],
                 Duration::from_secs(20),
             )
             .stdout

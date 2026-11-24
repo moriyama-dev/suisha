@@ -1,14 +1,4 @@
-pub mod background;
-pub mod exec;
-pub mod managers;
-pub mod model;
-pub mod ops;
-pub mod privileged;
-pub mod schedule;
-pub mod self_update;
-pub mod setup_file;
-pub mod store;
-pub mod system;
+//! The window: Tauri commands on top of what `suisha-core` does.
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -16,10 +6,11 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter};
 
-use managers::Action;
-use model::{ManagerId, Package, PackageRef};
-use ops::OpResult;
-use store::{HistoryEntry, Settings};
+use suisha_core::managers::{self, Action};
+use suisha_core::model::{ManagerId, Package, PackageRef};
+use suisha_core::ops::{self, OpResult};
+use suisha_core::store::{self, HistoryEntry, Settings};
+use suisha_core::{exec, privileged, schedule, self_update, setup_file, system};
 
 /// Only one change (install, remove, update) runs at a time.
 static BUSY: AtomicBool = AtomicBool::new(false);
@@ -186,41 +177,7 @@ struct SaveResult {
 #[tauri::command]
 async fn save_settings(settings: Settings) -> Result<SaveResult, String> {
     blocking(move || {
-        if !settings.auto_update.is_valid() {
-            return Err("Invalid time".into());
-        }
-        let previous = store::load_settings();
-        let mut warning = None;
-
-        let a = &settings.auto_update;
-        let wants_admin = [ManagerId::Apt, ManagerId::Snap].iter().any(|m| {
-            managers::binary(*m).is_some() && (a.managers.is_empty() || a.managers.contains(m))
-        });
-        let turning_on = a.enabled && wants_admin;
-        let turning_off = !a.enabled && previous.auto_update.enabled;
-        if turning_on && !privileged::auto_update_allowed() {
-            if !privileged::helpers_installed() {
-                warning = Some("auto.noHelpers".into());
-            } else if let Err(e) = privileged::set_auto_update_access(true) {
-                warning = Some(if e == "cancelled" {
-                    "auto.accessCancelled".into()
-                } else {
-                    format!("auto.accessFailed:{e}")
-                });
-            }
-        } else if turning_off && privileged::auto_update_allowed() {
-            // Taking the permission back is optional; dismissing the
-            // dialog leaves it in place, and the timer is gone anyway.
-            let _ = privileged::set_auto_update_access(false);
-        }
-
-        schedule::apply(&settings.auto_update)?;
-        // The card only edits the schedule; keep what it does not know about.
-        let settings = Settings {
-            self_update_auto: previous.self_update_auto,
-            ..settings
-        };
-        store::save_settings(&settings)?;
+        let (settings, warning) = schedule::save_auto_update(settings)?;
         Ok(SaveResult { settings, warning })
     })
     .await
@@ -268,7 +225,7 @@ async fn check_self_update() -> Result<self_update::SelfUpdate, String> {
 async fn update_self(app: AppHandle) -> Result<OpResult, String> {
     blocking(move || {
         let _guard = BusyGuard::take()?;
-        let steps = self_update::update_steps()?;
+        let steps = self_update::update_steps(true)?;
         Ok(run_steps(&app, &steps, "update"))
     })
     .await
@@ -278,26 +235,7 @@ async fn update_self(app: AppHandle) -> Result<OpResult, String> {
 /// the password once, unless that was done before.
 #[tauri::command]
 async fn set_self_update_auto(enabled: bool) -> Result<Settings, String> {
-    blocking(move || {
-        if enabled && cfg!(target_os = "macos") {
-            if self_update::channel() != "brew" {
-                return Err("self.noBrew".into());
-            }
-        } else if enabled {
-            if !privileged::helpers_installed() {
-                return Err("auto.noHelpers".into());
-            }
-            if !privileged::allowed(privileged::Helper::SelfUpdate) {
-                privileged::set_access(privileged::Helper::SelfUpdate, true)?;
-            }
-        }
-        schedule::apply_self_update(enabled)?;
-        let mut settings = store::load_settings();
-        settings.self_update_auto = enabled;
-        store::save_settings(&settings)?;
-        Ok(settings)
-    })
-    .await
+    blocking(move || schedule::save_self_update(enabled)).await
 }
 
 #[tauri::command]

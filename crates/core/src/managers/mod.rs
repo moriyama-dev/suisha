@@ -550,9 +550,10 @@ fn plan_flatpak(action: Action, group: &[&PackageRef]) -> Result<Vec<Step>, Stri
     Ok(steps)
 }
 
-/// Commands that update everything. `include_admin` adds apt and snap, and
-/// `interactive` opens the App Store's updates page when App Store apps have
-/// updates (a scheduled run leaves them to the App Store's own setting).
+/// Commands that update everything. `include_admin` adds apt and snap.
+/// `interactive` says that someone is there: a password can be asked for, and
+/// the App Store's updates page is opened when App Store apps have updates (a
+/// scheduled run leaves them to the App Store's own setting).
 pub fn plan_update_all(
     managers: &[ManagerId],
     include_admin: bool,
@@ -562,7 +563,7 @@ pub fn plan_update_all(
     let wants = |m: ManagerId| managers.contains(&m) && binary(m).is_some();
 
     if include_admin && (wants(ManagerId::Apt) || wants(ManagerId::Snap)) {
-        steps.push(privileged::update_all_step()?);
+        steps.push(privileged::update_all_step(interactive)?);
     }
     if wants(ManagerId::Flatpak) {
         steps.push(Step {

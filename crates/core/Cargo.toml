@@ -1,0 +1,16 @@
+[package]
+name = "suisha-core"
+description = "What Suisha's window and command line share: reading and driving apt, snap, Flatpak, Homebrew and the Mac App Store"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+edition.workspace = true
+
+[dependencies]
+chrono.workspace = true
+dirs = "6"
+rustix = { version = "1", features = ["process"] }
+serde.workspace = true
+serde_json.workspace = true
+ureq = "3"

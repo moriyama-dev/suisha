@@ -35,9 +35,14 @@ jobs:
         run: |
           APP_VERSION="$( jq -r .version src-tauri/tauri.conf.json )"
           NPM_VERSION="$( jq -r .version package.json )"
-          CARGO_VERSION="$( sed -n 's/^version = "\(.*\)"/\1/p' src-tauri/Cargo.toml | head -n 1 )"
+          CARGO_VERSION="$( sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n 1 )"
           if [[ "${APP_VERSION}" != "${NPM_VERSION}" || "${APP_VERSION}" != "${CARGO_VERSION}" ]]; then
             echo "Versions differ: tauri.conf.json ${APP_VERSION}, package.json ${NPM_VERSION}, Cargo.toml ${CARGO_VERSION}" >&2
+            exit 1
+          fi
+          # The window's package must ask for the command of the same release
+          if ! jq -e --arg want "suisha-cli (>= ${APP_VERSION})" '.bundle.linux.deb.depends | index($want)' src-tauri/tauri.conf.json > /dev/null; then
+            echo "tauri.conf.json: the deb must depend on suisha-cli (>= ${APP_VERSION})" >&2
             exit 1
           fi
           if [[ "${REF_TYPE}" == "tag" && "${REF_NAME}" != "${APP_VERSION}" ]]; then
@@ -70,20 +75,32 @@ jobs:
       - name: Checks and unit tests
         run: |
           npm run check
-          cd src-tauri && cargo test --locked
-      - name: Build the .deb
-        run: npm run tauri build -- --bundles deb
+          cargo test --locked --workspace
+      # Two packages: the window (suisha) and the command it is built on
+      # (suisha-cli), which servers install on its own
+      - name: Build the packages
+        run: |
+          npm run tauri build -- --bundles deb
+          cargo build --release --locked -p suisha-cli
+          scripts/build-cli-deb.sh
       - name: Launch the app
-        run: xvfb-run -a dbus-run-session -- scripts/launch-test.sh src-tauri/target/release/suisha
+        run: xvfb-run -a dbus-run-session -- scripts/launch-test.sh target/release/suisha-gui
+      - name: Install the packages and use the command
+        env:
+          RELEASE_VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          sudo apt-get install -y ./target/release/bundle/deb/suisha-cli_*.deb ./target/release/bundle/deb/Suisha_*.deb
+          scripts/cli-test.sh "${RELEASE_VERSION}"
       - name: Collect the package
         env:
           RELEASE_VERSION: ${{ needs.version.outputs.version }}
         run: |
           mkdir out
-          mv src-tauri/target/release/bundle/deb/*.deb "out/suisha-${RELEASE_VERSION}-linux-amd64.deb"
+          mv target/release/bundle/deb/Suisha_*.deb "out/suisha-${RELEASE_VERSION}-linux-amd64.deb"
+          mv target/release/bundle/deb/suisha-cli_*.deb "out/suisha-cli-${RELEASE_VERSION}-linux-amd64.deb"
           cd out
           for f in *; do sha256sum "${f}" > "${f}.sha256"; done
-          dpkg-deb --info ./*.deb
+          for f in ./*.deb; do dpkg-deb --info "${f}"; done
           ls -la
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -111,7 +128,7 @@ jobs:
       - name: Checks and unit tests
         run: |
           npm run check
-          cd src-tauri && cargo test --locked
+          cargo test --locked --workspace
       - name: Check the cask
         run: |
           ruby -c Casks/suisha.rb
@@ -121,17 +138,17 @@ jobs:
         run: npm run tauri build -- --target universal-apple-darwin --bundles app,dmg
       # An invalid signature only shows up as a crash at launch, so check it here
       - name: Verify the signature
-        run: codesign --verify --deep --strict --verbose=2 src-tauri/target/universal-apple-darwin/release/bundle/macos/Suisha.app
+        run: codesign --verify --deep --strict --verbose=2 target/universal-apple-darwin/release/bundle/macos/Suisha.app
       - name: Install mas for the launch test
         run: brew install mas
       - name: Launch the app
-        run: scripts/launch-test.sh src-tauri/target/universal-apple-darwin/release/bundle/macos/Suisha.app/Contents/MacOS/suisha
+        run: scripts/launch-test.sh target/universal-apple-darwin/release/bundle/macos/Suisha.app/Contents/MacOS/suisha
       - name: Collect the package
         env:
           RELEASE_VERSION: ${{ needs.version.outputs.version }}
         run: |
           mkdir out
-          mv src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg "out/suisha-${RELEASE_VERSION}-macos-universal.dmg"
+          mv target/universal-apple-darwin/release/bundle/dmg/*.dmg "out/suisha-${RELEASE_VERSION}-macos-universal.dmg"
           cd out
           for f in *; do shasum -a 256 "${f}" > "${f}.sha256"; done
           ls -la

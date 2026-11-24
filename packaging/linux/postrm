@@ -6,6 +6,7 @@ if [ "$1" = remove ] || [ "$1" = purge ]; then
           /etc/polkit-1/rules.d/49-suisha-self-update-*.rules
     rm -f /etc/polkit-1/localauthority/50-local.d/49-suisha-auto-update-*.pkla \
           /etc/polkit-1/localauthority/50-local.d/49-suisha-self-update-*.pkla
+    rm -f /etc/sudoers.d/suisha-auto-update-* /etc/sudoers.d/suisha-self-update-*
 fi
 # The apt source is configuration: it goes away on purge, and only if the
 # package wrote it.

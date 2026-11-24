@@ -1,0 +1,128 @@
+#!/bin/sh
+# Lets the calling user run one of Suisha's update helpers without a
+# password (enable), or takes that permission back (disable). "linger" keeps
+# the calling user's timers running while the user is logged out, which is
+# the normal state on a server.
+#
+# Usage: suisha-auto-update-access enable|disable [auto-update|self-update]
+#        suisha-auto-update-access linger
+#   auto-update (default): /usr/lib/suisha/suisha-auto-update
+#   self-update:           /usr/lib/suisha/suisha-self-update
+#
+# Run through pkexec (polkit action dev.moriyama.suisha.configure) from the
+# window, or through sudo from a terminal. The permission is given the same
+# way it was asked for: a polkit rule after pkexec, a sudoers entry after sudo.
+# The user is taken from PKEXEC_UID or SUDO_UID, never from the arguments.
+set -u
+export PATH=/usr/sbin:/usr/bin:/sbin:/bin
+umask 022
+
+usage() {
+    echo "usage: suisha-auto-update-access enable|disable [auto-update|self-update]" >&2
+    echo "       suisha-auto-update-access linger" >&2
+    exit 64
+}
+
+action="${1:-}"
+case "$action" in
+    enable|disable|linger) ;;
+    *) usage ;;
+esac
+
+kind="${2:-auto-update}"
+case "$kind" in
+    auto-update|self-update) ;;
+    *) echo "suisha-auto-update-access: unknown helper: $kind" >&2; exit 64 ;;
+esac
+if [ "$action" = linger ] && [ "$#" -ne 1 ]; then
+    usage
+fi
+
+if [ -n "${PKEXEC_UID:-}" ]; then
+    via=pkexec
+    uid="$PKEXEC_UID"
+elif [ -n "${SUDO_UID:-}" ]; then
+    via=sudo
+    uid="$SUDO_UID"
+else
+    echo "suisha-auto-update-access: run this through pkexec or sudo" >&2
+    exit 64
+fi
+case "$uid" in
+    ""|*[!0-9]*) echo "suisha-auto-update-access: unsupported user id" >&2; exit 64 ;;
+esac
+if [ "$uid" -eq 0 ]; then
+    echo "suisha-auto-update-access: root needs no permission" >&2
+    exit 64
+fi
+user="$(id -nu "$uid")" || exit 1
+case "$user" in
+    ""|-*|*[!A-Za-z0-9._-]*) echo "suisha-auto-update-access: unsupported user name" >&2; exit 64 ;;
+esac
+
+if [ "$action" = linger ]; then
+    exec loginctl enable-linger "$user"
+fi
+
+rules_dir=/etc/polkit-1/rules.d
+pkla_dir=/etc/polkit-1/localauthority/50-local.d
+rules="$rules_dir/49-suisha-$kind-$user.rules"
+pkla="$pkla_dir/49-suisha-$kind-$user.pkla"
+# sudo skips files whose name contains a dot, which a user name may; the
+# user id never does.
+sudoers="/etc/sudoers.d/suisha-$kind-$uid"
+
+if [ "$action" = disable ]; then
+    rm -f "$rules" "$pkla" "$sudoers"
+    exit 0
+fi
+
+if [ "$via" = sudo ]; then
+    if [ ! -d /etc/sudoers.d ]; then
+        echo "suisha-auto-update-access: /etc/sudoers.d is missing" >&2
+        exit 1
+    fi
+    tmp="$(mktemp)" || exit 1
+    # "#uid" names the user by id; the empty "" allows no arguments.
+    cat > "$tmp" <<SUDOERS
+# Written by Suisha at the request of $user (user id $uid).
+# Lets that user run /usr/lib/suisha/suisha-$kind without a password.
+# Remove with: suisha schedule off (or delete this file).
+#$uid ALL=(root) NOPASSWD: /usr/lib/suisha/suisha-$kind ""
+SUDOERS
+    # A broken file in /etc/sudoers.d locks everyone out of sudo, so it is
+    # checked before it is put there.
+    if ! visudo -c -q -f "$tmp"; then
+        rm -f "$tmp"
+        echo "suisha-auto-update-access: the sudoers entry did not pass visudo" >&2
+        exit 1
+    fi
+    install -o root -g root -m 0440 "$tmp" "$sudoers"
+    status=$?
+    rm -f "$tmp"
+    exit $status
+fi
+
+if [ -d "$rules_dir" ]; then
+    cat > "$rules" <<RULES
+// Written by Suisha at the request of $user.
+// Lets $user run /usr/lib/suisha/suisha-$kind without a password.
+polkit.addRule(function (action, subject) {
+    if (action.id === "dev.moriyama.suisha.$kind" && subject.user === "$user") {
+        return polkit.Result.YES;
+    }
+});
+RULES
+fi
+if [ -d /etc/polkit-1/localauthority ]; then
+    mkdir -p "$pkla_dir"
+    cat > "$pkla" <<PKLA
+[Suisha $kind for $user]
+Identity=unix-user:$user
+Action=dev.moriyama.suisha.$kind
+ResultAny=yes
+ResultInactive=yes
+ResultActive=yes
+PKLA
+fi
+exit 0
