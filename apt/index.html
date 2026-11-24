@@ -22,7 +22,8 @@ This is the apt repository of Suisha for Linux x64 (amd64), Ubuntu 22.04 or late
 curl -fsSL https://moriyama-dev.github.io/suisha/suisha-archive-keyring.gpg | sudo tee /etc/apt/keyrings/suisha-archive-keyring.gpg &gt; /dev/null
 echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/suisha-archive-keyring.gpg] https://moriyama-dev.github.io/suisha stable main" | sudo tee /etc/apt/sources.list.d/suisha.list &gt; /dev/null
 sudo apt update
-sudo apt install suisha</code></pre>
+sudo apt install suisha        # デスクトップ / with a desktop
+sudo apt install suisha-cli    # サーバー（コマンドだけ） / on a server (the command only)</code></pre>
 
 <p>署名鍵のフィンガープリント / Signing key fingerprint:<br>
 <code>5E50 CE53 AC3D C290 5D94  3D67 F3A3 49A9 8664 021E</code></p>

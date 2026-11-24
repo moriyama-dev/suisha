@@ -4,15 +4,16 @@ English | [日本語](README.ja.md)
 
 [Report a problem or suggest an idea](https://github.com/moriyama-dev/suisha/issues)
 
-Suisha (水車, "water wheel") is a desktop app for Ubuntu and macOS that keeps your apps up to date by itself.
+Suisha (水車, "water wheel") keeps the software on Ubuntu and macOS up to date by itself.
 It brings the package managers you already use into one window, so you can search, install, update and remove apps without remembering which tool each one came from.
+On a server, or over SSH, the same thing is one command: `suisha`.
 
 | | Works with |
 |---|---|
 | **Ubuntu** 22.04 or later | **apt**, **snap**, **Flatpak** and **Homebrew** (on Linux) |
 | **macOS** 13 Ventura or later | **Homebrew** (formulae and casks) and the **Mac App Store** (through [mas](https://github.com/mas-cli/mas)) |
 
-Suisha is free and open source. It sends nothing about you or your computer anywhere, and every command it runs (`brew upgrade`, `apt-get upgrade` and so on) is shown in the window.
+Suisha is free and open source. It sends nothing about you or your computer anywhere, and every command it runs (`brew upgrade`, `apt-get upgrade` and so on) is shown to you.
 
 ![Updates in Suisha, with automatic updates turned on](docs/updates.png)
 
@@ -30,6 +31,48 @@ Suisha is free and open source. It sends nothing about you or your computer anyw
 Suisha keeps no package catalog of its own. Everything comes from the package managers on your computer, so it shows exactly what they would.
 
 ![Searching all package managers at once](docs/search.png)
+
+## On a server, or in a terminal
+
+The `suisha` command does what the window does, without a desktop. It comes with the window, and on a server it installs on its own as the small `suisha-cli` package ([Install](#ubuntu)).
+
+```console
+$ suisha status
+Suisha 0.6.0
+
+Updates
+  apt   7 updates waiting  61 installed
+  snap  up to date         4 installed
+  Install them with: suisha update
+
+Automatic updates
+  every day at 03:00
+  Package managers: all
+  Next run: 2026-11-25 03:03
+  Last run: 2026-11-24 03:15
+```
+
+| | |
+|---|---|
+| `suisha status` | Waiting updates, the schedule, and what the system asks for (a restart, leftover packages) |
+| `suisha updates` | List the updates that are waiting |
+| `suisha update` | Install every update. `suisha update apt:git` updates only that package |
+| `suisha schedule set daily 03:00` | Update automatically. Also `weekly sun 03:00` and `every 6h`; `suisha schedule off` stops it |
+| `suisha list`, `suisha search NAME` | What is installed; search every package manager |
+| `suisha install apt:htop snap:btop`, `suisha remove htop` | Install and remove |
+| `suisha cleanup` | Remove packages nothing needs any more (`apt autoremove`) |
+| `suisha export apps.json`, `suisha setup apps.json` | Save the list of installed apps; install it on another server |
+| `suisha history` | What was changed, newest first, including the automatic updates |
+| `suisha self-update` | Update Suisha itself |
+| `suisha report`, `suisha request` | Report a problem or suggest an improvement: prints a link to a new GitHub issue with the versions filled in |
+
+- A package is written `MANAGER:NAME`, the way `suisha list` and `suisha search` print it.
+- Before anything is changed, Suisha shows the commands it is about to run and asks. `--yes` skips the question and `--dry-run` only shows the commands.
+- `--json` prints the result as JSON, for scripts. The exit code is 0 when it worked, 1 when it did not, and 2 when the command line could not be understood.
+- Messages are in English or Japanese, following the system language.
+- `suisha help` lists everything.
+
+On a server nobody is logged in most of the time. `suisha schedule set …` therefore also keeps your user's timer running while you are logged out (`loginctl enable-linger`), and the result of each run is in `suisha history` and in `journalctl --user -u suisha-auto-update`.
 
 ## Install
 
@@ -73,15 +116,19 @@ sudo install -d -m 0755 /etc/apt/keyrings
 curl -fsSL https://moriyama-dev.github.io/suisha/suisha-archive-keyring.gpg | sudo tee /etc/apt/keyrings/suisha-archive-keyring.gpg > /dev/null
 echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/suisha-archive-keyring.gpg] https://moriyama-dev.github.io/suisha stable main" | sudo tee /etc/apt/sources.list.d/suisha.list > /dev/null
 sudo apt update
-sudo apt install suisha
+sudo apt install suisha        # a computer with a desktop: the window and the command
+sudo apt install suisha-cli    # a server: only the command, no desktop libraries
 ```
 
-**From a downloaded package**
+Install one of the two. `suisha` brings `suisha-cli` with it.
 
-Download `suisha-<version>-linux-amd64.deb` from the [Releases](https://github.com/moriyama-dev/suisha/releases) page and run:
+**From downloaded packages**
+
+Download `suisha-cli-<version>-linux-amd64.deb` and, for the window, `suisha-<version>-linux-amd64.deb` from the [Releases](https://github.com/moriyama-dev/suisha/releases) page and run:
 
 ```sh
-sudo apt install ./suisha-0.5.2-linux-amd64.deb
+sudo apt install ./suisha-cli-0.6.0-linux-amd64.deb ./suisha-0.6.0-linux-amd64.deb   # with a desktop
+sudo apt install ./suisha-cli-0.6.0-linux-amd64.deb                                   # on a server
 ```
 
 Either way, Suisha is updated from then on: the package adds Suisha's apt repository (`/etc/apt/sources.list.d/suisha.list`) if it is not there yet.
@@ -91,7 +138,7 @@ The repository is signed with the key `5E50 CE53 AC3D C290 5D94  3D67 F3A3 49A9 
 
 Suisha does not stay running in the background. When you turn automatic updates on, it registers a timer with the system:
 
-- **Ubuntu:** a systemd user timer (`~/.config/systemd/user/suisha-auto-update.timer`). If the computer was off at that time, the update runs after you next log in.
+- **Ubuntu:** a systemd user timer (`~/.config/systemd/user/suisha-auto-update.timer`). If the computer was off at that time, the update runs after you next log in. When the schedule is set from a terminal without a desktop (a server), Suisha also turns on lingering for your user, so the timer runs while nobody is logged in.
 - **macOS:** a launchd agent (`~/Library/LaunchAgents/dev.moriyama.suisha.auto-update.plist`). If the Mac was asleep, the update runs after it wakes up. Its output goes to `~/Library/Logs/Suisha/auto-update.log`.
 
 Package servers do not announce new versions, so Suisha checks on a schedule; once an hour is the shortest interval, to keep the load low.
@@ -109,29 +156,31 @@ Homebrew needs no administrator password for most apps. A few casks run an insta
 
 ### Passwords on Ubuntu
 
-apt and snap need administrator rights. Suisha asks for them through the standard system password dialog (polkit):
+apt and snap need administrator rights. The window asks for them through the standard system password dialog (polkit), and the `suisha` command through `sudo` in the terminal. Run as root, the command asks nothing.
 
 - **When you install, remove or update by hand**, the system asks for your password. It is remembered for a few minutes.
-- **For automatic updates**, nobody is there to type a password. When you turn automatic updates on (or press **Register password** on the automatic updates card), Suisha asks for your password once and adds a polkit rule that lets your user run one fixed helper, `/usr/lib/suisha/suisha-auto-update`, without a password. That helper takes no arguments and only runs `apt-get update`, `apt-get upgrade` and `snap refresh`. Nothing else becomes password-free.
-- Turning automatic updates off asks for your password once more and removes the rule. Removing Suisha removes it too.
+- **For automatic updates**, nobody is there to type a password. When you turn automatic updates on (or press **Register password** on the automatic updates card), Suisha asks for your password once and lets your user run one fixed helper, `/usr/lib/suisha/suisha-auto-update`, without a password. That helper takes no arguments and only runs `apt-get update`, `apt-get upgrade` and `snap refresh`. Nothing else becomes password-free.
+  - From the window, this is a polkit rule.
+  - From the command, it is one line in `/etc/sudoers.d/suisha-auto-update-<your user id>`, checked with `visudo` before it is put in place.
+- Turning automatic updates off asks for your password once more and removes the permission. Removing Suisha removes it too.
 
 Flatpak and Homebrew work without administrator rights.
 
 ## Updating Suisha itself
 
 - **With everything else.** On Ubuntu, Suisha is an apt package from its own repository, so "Update all", automatic updates and a plain `sudo apt upgrade` all update it. On macOS, Suisha is a Homebrew cask, so "Update all", automatic updates and `brew upgrade` update it.
-- **From the button in the top right corner.** It shows Suisha's version and turns into a notice when a new version is out. **Update Suisha now** installs it, and **Restart Suisha** starts the new version.
-- **Automatically.** Turn on **Update Suisha automatically** in that same place. Once a day the system runs `suisha --self-update`.
-  - On Ubuntu, a systemd user timer does this. Turning it on asks for your password once and lets your user run one fixed helper, `/usr/lib/suisha/suisha-self-update`, without a password. That helper takes no arguments and only refreshes Suisha's own apt source and upgrades the `suisha` package.
+- **From the button in the top right corner.** It shows Suisha's version and turns into a notice when a new version is out. **Update Suisha now** installs it, and **Restart Suisha** starts the new version. In a terminal, `suisha self-update` does the same.
+- **Automatically.** Turn on **Update Suisha automatically** in that same place, or run `suisha self-update --auto on`. Once a day the system runs `suisha --self-update`.
+  - On Ubuntu, a systemd user timer does this. Turning it on asks for your password once and lets your user run one fixed helper, `/usr/lib/suisha/suisha-self-update`, without a password. That helper takes no arguments and only refreshes Suisha's own apt source and upgrades the `suisha-cli` and `suisha` packages.
   - On macOS, a launchd agent runs `brew upgrade --cask moriyama-dev/suisha/suisha`. No password is needed. This needs Suisha installed with Homebrew.
 
 ![The button in the top right corner, with a new version of Suisha available](docs/suisha-update.png)
 
-To know about new versions, Suisha asks GitHub for its latest release when it starts and every 6 hours while it is open. Only the public release information is requested; nothing about you or your computer is sent.
+To know about new versions, the window asks GitHub for Suisha's latest release when it starts and every 6 hours while it is open; the command asks only when you run `suisha self-update`. Only the public release information is requested; nothing about you or your computer is sent.
 
 ## The saved app list
 
-**Set up → Save list…** writes a JSON file like this:
+**Set up → Save list…** in the window, or `suisha export apps.json` in a terminal, writes a JSON file like this:
 
 ```json
 {
@@ -150,12 +199,30 @@ To know about new versions, Suisha asks GitHub for its latest release when it st
 It contains package names only: no settings, files or personal data.
 Lists are for moving between computers with the same system: a list saved on macOS (`"os": "macos"`, with `brew`, `brew-cask` and `mas` entries) opens on another Mac, and a list saved on Ubuntu opens on another Ubuntu computer.
 On a Mac, App Store apps from a list are opened in the App Store, one page each, to be installed there.
+In a terminal, `suisha setup apps.json` shows what the list has and this computer lacks, and installs it.
 
 ## Build from source
 
-You need Node.js 22 and Rust (stable).
+The code is one Cargo workspace:
 
-On Ubuntu, also the WebKitGTK development files:
+| | |
+|---|---|
+| `crates/core` | Reading and driving the package managers, the schedule, the history and the settings |
+| `crates/cli` | The `suisha` command |
+| `src-tauri`, `src` | The window (Tauri and Svelte) |
+| `packaging/linux` | The root helpers, the polkit policy and the package scripts |
+
+The command needs only Rust (stable):
+
+```sh
+git clone https://github.com/moriyama-dev/suisha.git
+cd suisha
+cargo run -p suisha-cli -- status                  # run the command
+cargo build --release -p suisha-cli                # build it
+scripts/build-cli-deb.sh                           # Ubuntu: build the suisha-cli .deb
+```
+
+For the window you also need Node.js 22 and, on Ubuntu, the WebKitGTK development files:
 
 ```sh
 sudo apt install libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libssl-dev libxdo-dev build-essential
@@ -164,8 +231,6 @@ sudo apt install libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev
 On macOS, the Xcode Command Line Tools (`xcode-select --install`).
 
 ```sh
-git clone https://github.com/moriyama-dev/suisha.git
-cd suisha
 npm ci
 npm run tauri dev                                  # run in development mode
 npm run tauri build                                # Ubuntu: build the .deb
@@ -176,7 +241,7 @@ Tests:
 
 ```sh
 npm run check                  # type-check the interface
-cd src-tauri && cargo test     # parsers, scheduling (systemd and launchd), setup files, input checks
+cargo test --workspace         # parsers, scheduling (systemd and launchd), setup files, the command line, input checks
 ```
 
 Suisha is built with [Tauri](https://tauri.app/) (Rust) and [Svelte](https://svelte.dev/).
