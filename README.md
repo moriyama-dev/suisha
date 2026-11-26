@@ -19,7 +19,7 @@ Suisha is free and open source. It sends nothing about you or your computer anyw
 
 ## What it does
 
-- **Automatic updates.** Every 1, 3, 6 or 12 hours, every day, or one day a week. The system's own timer (systemd on Ubuntu, launchd on macOS) starts Suisha at that time, even when its window is closed, and updates everything. You get a notification when updates were installed or something failed. While the window is open, Suisha also looks for new updates every 30 minutes.
+- **Automatic updates.** Every hour unless you choose otherwise: every 3, 6 or 12 hours, every day, or one day a week. The system's own timer (systemd on Ubuntu, launchd on macOS) starts Suisha at that time, even when its window is closed, and updates everything. You get a notification when updates were installed or something failed. While the window is open, Suisha also looks for new updates every 30 minutes.
 - **Update everything at once**, or only the packages you pick. Ubuntu's phased updates, which apt installs later on its own, are listed separately so that the count shows only what can be installed now. On macOS, apps from the Mac App Store are listed too, and their **Open App Store** button takes you straight to the App Store's Updates page.
 - **Search every package manager at once** and install from the results.
 - **See what you installed**, grouped by package manager, and remove what you no longer need. Dependencies and base system packages are left out, so they cannot be removed by accident.
@@ -38,7 +38,7 @@ The `suisha` command does what the window does, without a desktop. It comes with
 
 ```console
 $ suisha status
-Suisha 0.6.0
+Suisha 0.6.1
 
 Updates
   apt   7 updates waiting  61 installed
@@ -57,7 +57,8 @@ Automatic updates
 | `suisha status` | Waiting updates, the schedule, and what the system asks for (a restart, leftover packages) |
 | `suisha updates` | List the updates that are waiting |
 | `suisha update` | Install every update. `suisha update apt:git` updates only that package |
-| `suisha schedule set daily 03:00` | Update automatically. Also `weekly sun 03:00` and `every 6h`; `suisha schedule off` stops it |
+| `suisha on` | Update automatically: every hour, Suisha looks for updates in every package manager and installs them. `suisha off` stops it |
+| `suisha schedule set daily 03:00` | Update automatically at other times. Also `weekly sun 03:00` and `every 6h` |
 | `suisha list`, `suisha search NAME` | What is installed; search every package manager |
 | `suisha install apt:htop snap:btop`, `suisha remove htop` | Install and remove |
 | `suisha cleanup` | Remove packages nothing needs any more (`apt autoremove`) |
@@ -72,7 +73,7 @@ Automatic updates
 - Messages are in English or Japanese, following the system language.
 - `suisha help` lists everything.
 
-On a server nobody is logged in most of the time. `suisha schedule set …` therefore also keeps your user's timer running while you are logged out (`loginctl enable-linger`), and the result of each run is in `suisha history` and in `journalctl --user -u suisha-auto-update`.
+On a server nobody is logged in most of the time. `suisha on` and `suisha schedule set …` therefore also keeps your user's timer running while you are logged out (`loginctl enable-linger`), and the result of each run is in `suisha history` and in `journalctl --user -u suisha-auto-update`.
 
 ## Install
 
@@ -127,8 +128,8 @@ Install one of the two. `suisha` brings `suisha-cli` with it.
 Download `suisha-cli-<version>-linux-amd64.deb` and, for the window, `suisha-<version>-linux-amd64.deb` from the [Releases](https://github.com/moriyama-dev/suisha/releases) page and run:
 
 ```sh
-sudo apt install ./suisha-cli-0.6.0-linux-amd64.deb ./suisha-0.6.0-linux-amd64.deb   # with a desktop
-sudo apt install ./suisha-cli-0.6.0-linux-amd64.deb                                   # on a server
+sudo apt install ./suisha-cli-0.6.1-linux-amd64.deb ./suisha-0.6.1-linux-amd64.deb   # with a desktop
+sudo apt install ./suisha-cli-0.6.1-linux-amd64.deb                                   # on a server
 ```
 
 Either way, Suisha is updated from then on: the package adds Suisha's apt repository (`/etc/apt/sources.list.d/suisha.list`) if it is not there yet.

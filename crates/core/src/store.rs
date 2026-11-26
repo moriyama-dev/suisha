@@ -51,10 +51,12 @@ pub struct AutoUpdate {
 
 impl Default for AutoUpdate {
     fn default() -> Self {
+        // Turned on without further choices, automatic updates check every
+        // hour and install whatever is waiting, for every package manager.
         AutoUpdate {
             enabled: false,
-            frequency: Frequency::Daily,
-            every_hours: 6,
+            frequency: Frequency::Hours,
+            every_hours: 1,
             weekday: 1,
             hour: 12,
             minute: 0,
@@ -246,8 +248,9 @@ mod tests {
     fn settings_fill_defaults() {
         let s: Settings = serde_json::from_str(r#"{"autoUpdate":{"enabled":true}}"#).unwrap();
         assert!(s.auto_update.enabled);
-        assert_eq!(s.auto_update.hour, 12);
-        assert_eq!(s.auto_update.frequency, Frequency::Daily);
+        assert_eq!(s.auto_update.frequency, Frequency::Hours);
+        assert_eq!(s.auto_update.every_hours, 1);
+        assert!(s.auto_update.managers.is_empty());
         assert!(s.auto_update.notify);
     }
 

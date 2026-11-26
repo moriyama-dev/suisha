@@ -19,7 +19,7 @@ Suisha は無料のオープンソースです。あなたやコンピュータ�
 
 ## できること
 
-- **自動更新**：1・3・6・12 時間ごと、毎日、または週に1回から選べます。その時刻にシステムのタイマー（Ubuntu では systemd、macOS では launchd）が Suisha を起動して、すべてを更新します。Suisha の画面を閉じていても動きます。更新したときや失敗したときは通知で知らせます。画面を開いている間は、30 分ごとにも新しい更新がないか確認します
+- **自動更新**：初めは 1 時間ごとです。3・6・12 時間ごと、毎日、または週に1回にも変えられます。その時刻にシステムのタイマー（Ubuntu では systemd、macOS では launchd）が Suisha を起動して、すべてを更新します。Suisha の画面を閉じていても動きます。更新したときや失敗したときは通知で知らせます。画面を開いている間は、30 分ごとにも新しい更新がないか確認します
 - **まとめて更新**：すべてを一度に、または選んだものだけを更新できます。Ubuntu の段階的な配信（apt があとで自動で入れる更新）は別にまとめて表示するので、件数には今すぐ入れられるものだけが出ます。macOS では Mac App Store のアプリも一覧に出て、**App Store を開く** を押すと App Store の「アップデート」がそのまま開きます
 - **まとめて検索**：すべてのパッケージマネージャーを一度に検索し、結果からそのままインストールできます
 - **インストール済みの一覧**：パッケージマネージャーごとに表示し、いらないものを削除できます。依存関係で入ったものや、システムの土台になるパッケージは表示しないので、うっかり消すことはありません
@@ -38,7 +38,7 @@ Suisha は、パッケージの一覧を自分では持っていません。表�
 
 ```console
 $ suisha status
-Suisha 0.6.0
+Suisha 0.6.1
 
 更新
   apt   7 件の更新  61 件インストール済み
@@ -57,7 +57,8 @@ Suisha 0.6.0
 | `suisha status` | 更新の有無、自動更新の予定、システムからのお知らせ（再起動、不要になったパッケージ） |
 | `suisha updates` | 更新があるものの一覧 |
 | `suisha update` | すべての更新を入れる。`suisha update apt:git` なら、そのパッケージだけ |
-| `suisha schedule set daily 03:00` | 自動で更新する。`weekly sun 03:00` や `every 6h` も指定できます。止めるときは `suisha schedule off` |
+| `suisha on` | 自動で更新する：1時間ごとに、すべてのパッケージマネージャーの更新を確かめて、あれば入れます。止めるときは `suisha off` |
+| `suisha schedule set daily 03:00` | 別の時刻に自動で更新する。`weekly sun 03:00` や `every 6h` も指定できます |
 | `suisha list`、`suisha search 名前` | 入っているものの一覧。すべてのパッケージマネージャーからの検索 |
 | `suisha install apt:htop snap:btop`、`suisha remove htop` | インストールと削除 |
 | `suisha cleanup` | 不要になったパッケージを削除する（`apt autoremove`） |
@@ -72,7 +73,7 @@ Suisha 0.6.0
 - メッセージは、システムの言語に合わせて英語か日本語で出ます
 - `suisha help` で、すべてのコマンドを見られます
 
-サーバーでは、ほとんどの時間、誰もログインしていません。そのため `suisha schedule set …` は、ログアウトしている間もあなたのユーザーのタイマーが動くようにします（`loginctl enable-linger`）。毎回の結果は、`suisha history` と `journalctl --user -u suisha-auto-update` で確認できます。
+サーバーでは、ほとんどの時間、誰もログインしていません。そのため `suisha on` と `suisha schedule set …` は、ログアウトしている間もあなたのユーザーのタイマーが動くようにします（`loginctl enable-linger`）。毎回の結果は、`suisha history` と `journalctl --user -u suisha-auto-update` で確認できます。
 
 ## インストール
 
@@ -127,8 +128,8 @@ sudo apt install suisha-cli    # サーバー：コマンドだけ。デスク�
 [Releases](https://github.com/moriyama-dev/suisha/releases) のページから `suisha-cli-<版>-linux-amd64.deb` と、画面も使うときは `suisha-<版>-linux-amd64.deb` をダウンロードして、次を実行します。
 
 ```sh
-sudo apt install ./suisha-cli-0.6.0-linux-amd64.deb ./suisha-0.6.0-linux-amd64.deb   # デスクトップあり
-sudo apt install ./suisha-cli-0.6.0-linux-amd64.deb                                   # サーバー
+sudo apt install ./suisha-cli-0.6.1-linux-amd64.deb ./suisha-0.6.1-linux-amd64.deb   # デスクトップあり
+sudo apt install ./suisha-cli-0.6.1-linux-amd64.deb                                   # サーバー
 ```
 
 どちらの方法でも、以後は Suisha 自体も更新されます。パッケージを入れると、Suisha の apt リポジトリ（`/etc/apt/sources.list.d/suisha.list`）が、まだなければ登録されるためです。

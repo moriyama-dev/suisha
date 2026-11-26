@@ -64,6 +64,8 @@ Change
   cleanup                Remove packages nothing needs any more (apt autoremove)
 
 Automate
+  on                     Update automatically: every hour, every package manager
+  off                    Stop updating automatically
   schedule               Show the automatic updates
   schedule set daily 03:00
   schedule set weekly sun 03:00
@@ -84,7 +86,7 @@ Options
       --dry-run          Show the commands without running them
       --json             Print the result as JSON
       --linger, --no-linger
-                         (schedule) keep the timer running while logged out, or not
+                         (on, schedule) keep the timer running while logged out, or not
 
 A package is written MANAGER:NAME, the way `suisha list` and `suisha search` print it.
 Every command Suisha runs is shown before it runs. Suisha sends nothing about you or
@@ -111,6 +113,8 @@ apt・snap・Flatpak・Homebrew を1つのコマンドで扱います。
   cleanup                不要になったパッケージを削除する（apt autoremove）
 
 自動化
+  on                     自動で更新する：1時間ごと、すべてのパッケージマネージャー
+  off                    自動更新を止める
   schedule               自動更新の設定を表示する
   schedule set daily 03:00
   schedule set weekly sun 03:00
@@ -131,7 +135,7 @@ Suisha 自体
       --dry-run          コマンドを表示するだけで、実行しない
       --json             結果を JSON で出す
       --linger, --no-linger
-                         （schedule）ログアウト中もタイマーを動かす／動かさない
+                         （on、schedule）ログアウト中もタイマーを動かす／動かさない
 
 パッケージは「マネージャー:名前」の形で書きます。`suisha list` と `suisha search` の表示と同じです。
 Suisha が実行するコマンドは、実行の前にすべて表示します。あなたやこのコンピューターの情報を、
@@ -202,6 +206,8 @@ pub fn run(args: &[String]) -> i32 {
         "cleanup" => packages::cleanup(&args),
         "history" => status::history(&args),
         "schedule" => schedule::schedule(&args),
+        "on" => schedule::on(&args),
+        "off" => schedule::off(&args),
         "export" => setup::export(&args),
         "setup" => setup::setup(&args),
         "self-update" => own::self_update(&args),
@@ -227,6 +233,8 @@ mod tests {
         for command in [
             "update",
             "status",
+            "on",
+            "off",
             "--auto-update",
             "--self-check",
             "--version",

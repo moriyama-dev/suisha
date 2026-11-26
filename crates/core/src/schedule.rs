@@ -542,6 +542,7 @@ mod tests {
     fn calendars() {
         let mut a = AutoUpdate {
             enabled: true,
+            frequency: Frequency::Daily,
             hour: 7,
             minute: 5,
             ..Default::default()
@@ -575,6 +576,7 @@ mod tests {
     fn launchd_times() {
         let mut a = AutoUpdate {
             enabled: true,
+            frequency: Frequency::Daily,
             hour: 7,
             minute: 5,
             ..Default::default()

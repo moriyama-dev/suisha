@@ -107,8 +107,8 @@ pub fn lines(info: &Info) -> Vec<String> {
     let a = &info.settings;
     if !a.enabled {
         return vec![tr!(
-            "Off. Turn them on with, for example: suisha schedule set daily 03:00",
-            "オフです。オンにする例：suisha schedule set daily 03:00"
+            "Off. Turn them on with: suisha on (every hour, every package manager)",
+            "オフです。オンにするには：suisha on（1時間ごと、すべてのパッケージマネージャー）"
         )];
     }
     let mut lines = vec![describe(a)];
@@ -183,8 +183,8 @@ fn parse_day(text: &str) -> Option<u8> {
 
 fn usage() -> String {
     tr!(
-        "Use one of:\n  suisha schedule set daily 03:00\n  suisha schedule set weekly sun 03:00\n  suisha schedule set every 6h        (1h, 3h, 6h or 12h; --minute 30 for half past)\n  suisha schedule on | off",
-        "次のどれかの形で指定してください：\n  suisha schedule set daily 03:00\n  suisha schedule set weekly sun 03:00\n  suisha schedule set every 6h        （1h・3h・6h・12h。--minute 30 で毎時 30 分）\n  suisha schedule on | off"
+        "Use one of:\n  suisha on                           (every hour, every package manager)\n  suisha schedule set daily 03:00\n  suisha schedule set weekly sun 03:00\n  suisha schedule set every 6h        (1h, 3h, 6h or 12h; --minute 30 for half past)\n  suisha schedule on | off",
+        "次のどれかの形で指定してください：\n  suisha on                           （1時間ごと、すべてのパッケージマネージャー）\n  suisha schedule set daily 03:00\n  suisha schedule set weekly sun 03:00\n  suisha schedule set every 6h        （1h・3h・6h・12h。--minute 30 で毎時 30 分）\n  suisha schedule on | off"
     )
 }
 
@@ -300,6 +300,51 @@ fn apply(args: &Args, a: AutoUpdate) -> Result<i32, String> {
     Ok(code)
 }
 
+/// What `suisha on` sets, whatever was set before: every hour, and every
+/// package manager unless --manager names some. --minute moves the hour's
+/// run (on the hour without it).
+pub fn hourly(args: &Args, current: &AutoUpdate) -> Result<AutoUpdate, String> {
+    Ok(AutoUpdate {
+        enabled: true,
+        frequency: Frequency::Hours,
+        every_hours: 1,
+        minute: args.minute.unwrap_or(0),
+        managers: if args.managers.is_empty() {
+            Vec::new()
+        } else {
+            crate::packages::chosen(args)?
+        },
+        ..current.clone()
+    })
+}
+
+fn no_words(args: &Args) -> Result<(), String> {
+    match args.positional.first() {
+        None => Ok(()),
+        Some(_) => Err(usage()),
+    }
+}
+
+/// `suisha on`: check for updates every hour and install them.
+pub fn on(args: &Args) -> Result<i32, String> {
+    no_words(args)?;
+    let current = store::load_settings().auto_update;
+    apply(args, hourly(args, &current)?)
+}
+
+/// `suisha off`: the same as `suisha schedule off`.
+pub fn off(args: &Args) -> Result<i32, String> {
+    no_words(args)?;
+    let current = store::load_settings().auto_update;
+    apply(
+        args,
+        AutoUpdate {
+            enabled: false,
+            ..current
+        },
+    )
+}
+
 pub fn schedule(args: &Args) -> Result<i32, String> {
     let current = store::load_settings().auto_update;
     let managers = |keep: &AutoUpdate| -> Result<Vec<ManagerId>, String> {
@@ -385,6 +430,39 @@ mod tests {
         // --minute belongs to the hourly forms.
         assert!(when(&["daily", "03:00"], Some(10)).is_err());
         assert!(when(&[], None).is_err());
+    }
+
+    #[test]
+    fn on_means_every_hour_and_everything() {
+        let before = when(&["weekly", "sun", "03:30"], None).unwrap();
+        let before = AutoUpdate {
+            managers: vec![ManagerId::Apt],
+            notify: false,
+            ..before
+        };
+        let a = hourly(&Args::default(), &before).unwrap();
+        assert!(a.enabled && a.is_valid());
+        assert_eq!(
+            (a.frequency, a.every_hours, a.minute),
+            (Frequency::Hours, 1, 0)
+        );
+        assert!(a.managers.is_empty(), "every package manager");
+        // What `on` does not decide stays as it was.
+        assert!(!a.notify);
+
+        let args = Args {
+            minute: Some(30),
+            ..Args::default()
+        };
+        assert_eq!(hourly(&args, &before).unwrap().minute, 30);
+    }
+
+    #[test]
+    fn the_first_schedule_is_every_hour() {
+        let a = AutoUpdate::default();
+        assert!(!a.enabled && a.is_valid());
+        assert_eq!((a.frequency, a.every_hours), (Frequency::Hours, 1));
+        assert!(a.managers.is_empty());
     }
 
     #[test]
