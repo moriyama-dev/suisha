@@ -84,6 +84,15 @@ const en = {
     'When you press the button below, the system asks for your password. Enter it so that apt and snap can be updated automatically.',
   'auto.sidebar': 'Automatic updates',
   'auto.closeOk': 'You can close this window. Suisha still updates in the background at these times.',
+  'startup.title': 'Check for updates when the computer starts',
+  'startup.text':
+    'A minute or two after you log in, Suisha checks for updates and shows a notification when some are waiting. It does not stay running.',
+  'startup.textAuto':
+    'A minute or two after you log in, Suisha runs an automatic update. It does not stay running.',
+  'startup.new': 'This is on from the start. Turn it off here if you do not want it.',
+  'startup.ok': 'OK',
+  'startup.onDone': 'Suisha now checks for updates when the computer starts.',
+  'startup.offDone': 'Suisha no longer checks for updates when the computer starts.',
 
   'installed.title': 'Installed',
   'installed.filter': 'Filter by name',
@@ -323,6 +332,14 @@ const ja: Record<Key, string> = {
     '下のボタンを押すと、パスワードの入力画面が出ます。apt と snap を自動で更新できるように、入力してください。',
   'auto.sidebar': '自動更新',
   'auto.closeOk': 'この画面は閉じてかまいません。閉じていても、決めた時刻に Suisha が裏で更新します。',
+  'startup.title': '起動時に更新を確認する',
+  'startup.text':
+    'ログインの1〜2分後に Suisha が更新を確認し、更新があれば通知でお知らせします。常駐はしません。',
+  'startup.textAuto': 'ログインの1〜2分後に、Suisha が自動更新を1回実行します。常駐はしません。',
+  'startup.new': '最初からオンになっています。不要なときは、ここでオフにしてください。',
+  'startup.ok': 'OK',
+  'startup.onDone': 'これから Suisha は、起動時に更新を確認します。',
+  'startup.offDone': 'Suisha は起動時に更新を確認しなくなりました。',
 
   'installed.title': 'インストール済み',
   'installed.filter': '名前で絞り込む',

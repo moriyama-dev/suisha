@@ -18,6 +18,11 @@ const AUTO_UNIT: &str = "suisha-auto-update";
 const SELF_UNIT: &str = "suisha-self-update";
 pub const AUTO_LABEL: &str = "dev.moriyama.suisha.auto-update";
 pub const SELF_LABEL: &str = "dev.moriyama.suisha.self-update";
+pub const STARTUP_LABEL: &str = "dev.moriyama.suisha.startup-check";
+/// On Linux the suisha-cli package installs the check at startup for every
+/// user (systemd's own place for packaged user units, already enabled), and
+/// the setting decides whether it does anything.
+pub const STARTUP_TIMER: &str = "/usr/lib/systemd/user/suisha-startup-check.timer";
 
 /// The program the timer should start. Inside an AppImage the running file
 /// is a temporary mount, so the AppImage itself is used.
@@ -156,6 +161,37 @@ pub fn launchd_plist(
   <key>StartCalendarInterval</key>
   <array>
 {when}  </array>
+  <key>ProcessType</key>
+  <string>Background</string>
+  <key>StandardOutPath</key>
+  <string>{log}</string>
+  <key>StandardErrorPath</key>
+  <string>{log}</string>
+</dict>
+</plist>
+"#
+    )
+}
+
+/// A launchd agent that starts `program argument` each time the user logs
+/// in (and once when it is loaded).
+pub fn launchd_login_plist(label: &str, program: &str, argument: &str, log: &str) -> String {
+    let program = xml_escape(program);
+    let log = xml_escape(log);
+    format!(
+        r#"<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>{label}</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>{program}</string>
+    <string>{argument}</string>
+  </array>
+  <key>RunAtLoad</key>
+  <true/>
   <key>ProcessType</key>
   <string>Background</string>
   <key>StandardOutPath</key>
@@ -443,6 +479,54 @@ pub fn apply_self_update(enabled: bool) -> Result<(), String> {
     set_timer(SELF_UNIT, units)
 }
 
+/// Whether the check at startup can run on this computer.
+pub fn startup_supported() -> bool {
+    cfg!(target_os = "macos") || Path::new(STARTUP_TIMER).is_file()
+}
+
+/// Written just before the login agent is loaded: launchd starts an agent
+/// with RunAtLoad as soon as it is loaded, and that run is not a login.
+pub fn startup_marker() -> PathBuf {
+    store::data_dir().join("startup-agent-loaded")
+}
+
+/// Make the check at startup match the setting. Only macOS has something to
+/// install; on Linux the package already did.
+pub fn apply_startup_check(enabled: bool) -> Result<(), String> {
+    if !cfg!(target_os = "macos") {
+        return Ok(());
+    }
+    let program = program_path()?;
+    let plist = enabled.then(|| {
+        launchd_login_plist(
+            STARTUP_LABEL,
+            &program.to_string_lossy(),
+            "--startup-check",
+            &log_path("startup-check").to_string_lossy(),
+        )
+    });
+    if plist.is_some() {
+        // The window also calls this when it opens; it has just shown the
+        // updates, so skipping a check that starts right then loses nothing.
+        let marker = startup_marker();
+        if let Some(dir) = marker.parent() {
+            let _ = fs::create_dir_all(dir);
+        }
+        let _ = fs::write(&marker, "");
+    }
+    set_agent(STARTUP_LABEL, plist)
+}
+
+/// Turn the check at startup on or off.
+pub fn save_startup_check(enabled: bool) -> Result<Settings, String> {
+    apply_startup_check(enabled)?;
+    let mut settings = store::load_settings();
+    settings.startup_check = enabled;
+    settings.startup_check_noticed = true;
+    store::save_settings(&settings)?;
+    Ok(settings)
+}
+
 /// Save the automatic update settings and make the timer match them.
 ///
 /// Turning automatic updates on for apt or snap asks once for the password,
@@ -481,6 +565,8 @@ pub fn save_auto_update(settings: Settings) -> Result<(Settings, Option<String>)
     // Only the schedule is edited here; keep what this does not know about.
     let settings = Settings {
         self_update_auto: previous.self_update_auto,
+        startup_check: previous.startup_check,
+        startup_check_noticed: previous.startup_check_noticed,
         ..settings
     };
     store::save_settings(&settings)?;
@@ -524,6 +610,20 @@ mod tests {
         assert_eq!(command_next_to(&window), Some(dir.join("suisha")));
         assert_eq!(command_next_to(&dir.join("suisha")), None);
         fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn the_login_agent_runs_at_load() {
+        let plist = launchd_login_plist(
+            STARTUP_LABEL,
+            "/Applications/A & B.app/x",
+            "--startup-check",
+            "/tmp/l.log",
+        );
+        assert!(plist.contains("<key>RunAtLoad</key>\n  <true/>"));
+        assert!(plist.contains("<string>/Applications/A &amp; B.app/x</string>"));
+        assert!(plist.contains("<string>--startup-check</string>"));
+        assert!(!plist.contains("StartCalendarInterval"));
     }
 
     #[test]

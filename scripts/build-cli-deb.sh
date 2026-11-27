@@ -27,6 +27,14 @@ install -D -m 0644 "$ROOT/packaging/linux/dev.moriyama.suisha.policy" \
 install -D -m 0644 "$ROOT/packaging/linux/suisha-archive-keyring.asc" \
     "$PKG/usr/share/keyrings/suisha-archive-keyring.asc"
 install -D -m 0644 "$ROOT/LICENSE" "$PKG/usr/share/doc/suisha-cli/copyright"
+# The check at startup, for every user and on from the start (the setting in
+# each user's Suisha turns it off).
+UNITS="$PKG/usr/lib/systemd/user"
+for unit in suisha-startup-check.service suisha-startup-check.timer; do
+    install -D -m 0644 "$ROOT/packaging/linux/$unit" "$UNITS/$unit"
+done
+mkdir -p "$UNITS/timers.target.wants"
+ln -s ../suisha-startup-check.timer "$UNITS/timers.target.wants/suisha-startup-check.timer"
 
 mkdir "$PKG/DEBIAN"
 install -m 0755 "$ROOT/packaging/linux/postinst" "$ROOT/packaging/linux/postrm" "$PKG/DEBIAN/"

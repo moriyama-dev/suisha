@@ -20,6 +20,7 @@ Suisha is free and open source. It sends nothing about you or your computer anyw
 ## What it does
 
 - **Automatic updates.** Every hour unless you choose otherwise: every 3, 6 or 12 hours, every day, or one day a week. The system's own timer (systemd on Ubuntu, launchd on macOS) starts Suisha at that time, even when its window is closed, and updates everything. You get a notification when updates were installed or something failed. While the window is open, Suisha also looks for new updates every 30 minutes.
+- **A check when the computer starts.** A minute or two after you log in, Suisha looks for updates and shows a notification when some are waiting. It is on from the start; turn off **Check for updates when the computer starts** in the automatic updates card, or run `suisha autostart off`. With automatic updates on, it runs one instead.
 - **Update everything at once**, or only the packages you pick. Ubuntu's phased updates, which apt installs later on its own, are listed separately so that the count shows only what can be installed now. On macOS, apps from the Mac App Store are listed too, and their **Open App Store** button takes you straight to the App Store's Updates page.
 - **Search every package manager at once** and install from the results.
 - **See what you installed**, grouped by package manager, and remove what you no longer need. Dependencies and base system packages are left out, so they cannot be removed by accident.
@@ -58,6 +59,7 @@ Automatic updates
 | `suisha updates` | List the updates that are waiting |
 | `suisha update` | Install every update. `suisha update apt:git` updates only that package |
 | `suisha on` | Update automatically: every hour, Suisha looks for updates in every package manager and installs them. `suisha off` stops it |
+| `suisha autostart on`, `suisha autostart off` | Check for updates a little after the server starts (on unless turned off). The result is in `suisha status` |
 | `suisha schedule set daily 03:00` | Update automatically at other times. Also `weekly sun 03:00` and `every 6h` |
 | `suisha list`, `suisha search NAME` | What is installed; search every package manager |
 | `suisha install apt:htop snap:btop`, `suisha remove htop` | Install and remove |
@@ -146,6 +148,15 @@ Package servers do not announce new versions, so Suisha checks on a schedule; on
 
 The timer runs `suisha --auto-update`, which updates every package manager you selected, writes the result to the history and shows a notification.
 Turning automatic updates off removes the timer.
+
+### The check at startup
+
+This does not keep Suisha running either. It is on from the start, and the switch (or `suisha autostart on|off`) only changes a setting:
+
+- **Ubuntu:** the `suisha-cli` package installs a systemd user timer for every user, `/usr/lib/systemd/user/suisha-startup-check.timer`. It runs `suisha --startup-check` two minutes after systemd starts for your user: when you log in, or when the computer starts if lingering is on (a server where you ran `suisha on`, or `suisha autostart on --linger`). System accounts such as the login screen are left out.
+- **macOS:** a launchd agent that runs at login (`~/Library/LaunchAgents/dev.moriyama.suisha.startup-check.plist`). It waits a minute before checking. Its output goes to `~/Library/Logs/Suisha/startup-check.log`.
+
+The check counts the waiting updates, notes the result for `suisha status`, and shows a notification when there are any. With automatic updates on, it runs an automatic update instead. It installs nothing on its own.
 
 Mac App Store apps are not part of Suisha's automatic updates: the App Store updates them by itself when **Automatic Updates** is turned on in its settings.
 

@@ -1,7 +1,8 @@
 #!/bin/sh
 # macOS check of automatic updates: turn them on in the settings file, start
 # Suisha so that it registers its launchd agent, then let launchd run the
-# agent once and wait for the entry it writes to the history.
+# agent once and wait for the entry it writes to the history. Then the same
+# for the check at startup, which is on without being turned on.
 # Usage: scripts/macos-schedule-test.sh PATH/TO/Suisha.app/Contents/MacOS/suisha
 set -eu
 
@@ -62,3 +63,38 @@ cat "$LOG"
 launchctl bootout "$DOMAIN" "$PLIST"
 rm -f "$PLIST"
 echo "The launchd agent ran Suisha's automatic update."
+
+# The check at startup: the window registered a login agent too. launchd
+# ran it when it was loaded, and that run must have done nothing.
+STARTUP="dev.moriyama.suisha.startup-check"
+STARTUP_PLIST="$HOME/Library/LaunchAgents/$STARTUP.plist"
+STARTUP_LOG="$HOME/Library/Logs/Suisha/startup-check.log"
+plutil -lint "$STARTUP_PLIST"
+grep -F "<string>--startup-check</string>" "$STARTUP_PLIST"
+launchctl print "$DOMAIN/$STARTUP" | head -n 30
+if [ -e "$DATA/startup-check.json" ]; then
+    echo "The check ran when the agent was loaded, not at a login." >&2
+    exit 1
+fi
+
+# What a login does: run it again, past the moment it was loaded.
+rm -f "$DATA/startup-agent-loaded"
+launchctl kickstart "$DOMAIN/$STARTUP"
+i=0
+until [ -e "$DATA/startup-check.json" ]; do
+    i=$((i + 1))
+    if [ "$i" -gt 120 ]; then
+        echo "The check at startup wrote nothing within 20 minutes." >&2
+        cat "$STARTUP_LOG" >&2 || true
+        exit 1
+    fi
+    sleep 10
+done
+echo "Check at startup:"
+cat "$DATA/startup-check.json"
+echo
+cat "$STARTUP_LOG" || true
+
+launchctl bootout "$DOMAIN" "$STARTUP_PLIST"
+rm -f "$STARTUP_PLIST"
+echo "The login agent ran Suisha's check at startup."

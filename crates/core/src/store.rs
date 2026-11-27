@@ -87,6 +87,11 @@ pub struct Settings {
     /// History entries older than this many days are deleted. `None` keeps
     /// them all; 0 keeps no history.
     pub history_keep_days: Option<u32>,
+    /// Check for updates a little after the computer starts or the user
+    /// logs in, and say when some are waiting. On unless turned off.
+    pub startup_check: bool,
+    /// The window has told the person about the check at startup once.
+    pub startup_check_noticed: bool,
 }
 
 /// The longest period that can be typed in.
@@ -99,6 +104,8 @@ impl Default for Settings {
             self_update_auto: false,
             language: String::new(),
             history_keep_days: Some(100),
+            startup_check: true,
+            startup_check_noticed: false,
         }
     }
 }
@@ -236,6 +243,38 @@ pub fn read_history() -> Vec<HistoryEntry> {
     list
 }
 
+/// What the last check at startup found.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StartupCheck {
+    /// RFC 3339, UTC.
+    pub time: String,
+    /// Updates that can be installed now, over every package manager.
+    pub updates: usize,
+    /// The automatic update ran instead of only counting.
+    #[serde(default)]
+    pub updated: bool,
+}
+
+fn startup_check_path() -> PathBuf {
+    data_dir().join("startup-check.json")
+}
+
+pub fn load_startup_check() -> Option<StartupCheck> {
+    fs::read_to_string(startup_check_path())
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok())
+}
+
+pub fn save_startup_check(check: &StartupCheck) {
+    let dir = data_dir();
+    if fs::create_dir_all(&dir).is_ok()
+        && let Ok(text) = serde_json::to_string(check)
+    {
+        let _ = fs::write(startup_check_path(), text);
+    }
+}
+
 pub fn now() -> String {
     chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true)
 }
@@ -243,6 +282,18 @@ pub fn now() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_check_at_startup_is_on_for_old_settings_too() {
+        assert!(Settings::default().startup_check);
+        // A settings file from 0.6.1 does not know the setting.
+        let old = r#"{"autoUpdate":{"enabled":true},"selfUpdateAuto":false,"language":"ja","historyKeepDays":100}"#;
+        let s: Settings = serde_json::from_str(old).unwrap();
+        assert!(s.startup_check && !s.startup_check_noticed);
+        assert!(s.auto_update.enabled);
+        let off = r#"{"startupCheck":false}"#;
+        assert!(!serde_json::from_str::<Settings>(off).unwrap().startup_check);
+    }
 
     #[test]
     fn settings_fill_defaults() {

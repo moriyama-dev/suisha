@@ -32,6 +32,8 @@ export interface AppInfo {
   autoUpdateAllowed: boolean;
   /** "Update Suisha automatically" can be turned on here. */
   selfUpdateAuto: boolean;
+  /** The check for updates after starting up can run here. */
+  startupCheck: boolean;
 }
 
 export interface StepOutcome {
@@ -65,6 +67,10 @@ export interface Settings {
   language: string;
   /** History entries older than this many days are deleted. null keeps them all; 0 keeps no history. */
   historyKeepDays: number | null;
+  /** Check for updates a little after the computer starts or the user logs in. */
+  startupCheck: boolean;
+  /** The note about the check at startup was read. */
+  startupCheckNoticed: boolean;
 }
 
 export interface HistoryEntry {
@@ -147,6 +153,8 @@ export const api = {
   checkSelfUpdate: () => invoke<SelfUpdate>('check_self_update'),
   updateSelf: () => invoke<OpResult>('update_self'),
   setSelfUpdateAuto: (enabled: boolean) => invoke<Settings>('set_self_update_auto', { enabled }),
+  setStartupCheck: (enabled: boolean) => invoke<Settings>('set_startup_check', { enabled }),
+  dismissStartupNotice: () => invoke<Settings>('dismiss_startup_notice'),
   systemStatus: () => invoke<SystemStatus>('system_status'),
   cleanUp: () => invoke<OpResult>('clean_up'),
   addFlathub: () => invoke<OpResult>('add_flathub'),

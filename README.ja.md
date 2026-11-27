@@ -20,6 +20,7 @@ Suisha は無料のオープンソースです。あなたやコンピュータ�
 ## できること
 
 - **自動更新**：初めは 1 時間ごとです。3・6・12 時間ごと、毎日、または週に1回にも変えられます。その時刻にシステムのタイマー（Ubuntu では systemd、macOS では launchd）が Suisha を起動して、すべてを更新します。Suisha の画面を閉じていても動きます。更新したときや失敗したときは通知で知らせます。画面を開いている間は、30 分ごとにも新しい更新がないか確認します
+- **起動時の確認**：ログインの1〜2分後に Suisha が更新を確認し、更新があれば通知で知らせます。最初からオンです。止めるときは、自動更新の欄の **起動時に更新を確認する** のチェックを外すか、`suisha autostart off` を実行します。自動更新がオンのときは、確認の代わりに自動更新を1回実行します
 - **まとめて更新**：すべてを一度に、または選んだものだけを更新できます。Ubuntu の段階的な配信（apt があとで自動で入れる更新）は別にまとめて表示するので、件数には今すぐ入れられるものだけが出ます。macOS では Mac App Store のアプリも一覧に出て、**App Store を開く** を押すと App Store の「アップデート」がそのまま開きます
 - **まとめて検索**：すべてのパッケージマネージャーを一度に検索し、結果からそのままインストールできます
 - **インストール済みの一覧**：パッケージマネージャーごとに表示し、いらないものを削除できます。依存関係で入ったものや、システムの土台になるパッケージは表示しないので、うっかり消すことはありません
@@ -58,6 +59,7 @@ Suisha 0.6.1
 | `suisha updates` | 更新があるものの一覧 |
 | `suisha update` | すべての更新を入れる。`suisha update apt:git` なら、そのパッケージだけ |
 | `suisha on` | 自動で更新する：1時間ごとに、すべてのパッケージマネージャーの更新を確かめて、あれば入れます。止めるときは `suisha off` |
+| `suisha autostart on`、`suisha autostart off` | サーバーの起動の少しあとに更新を確認する（オフにしない限りオン）。結果は `suisha status` で見られます |
 | `suisha schedule set daily 03:00` | 別の時刻に自動で更新する。`weekly sun 03:00` や `every 6h` も指定できます |
 | `suisha list`、`suisha search 名前` | 入っているものの一覧。すべてのパッケージマネージャーからの検索 |
 | `suisha install apt:htop snap:btop`、`suisha remove htop` | インストールと削除 |
@@ -148,6 +150,15 @@ Suisha は、裏で常に動いているわけではありません。自動更�
 
 タイマーは `suisha --auto-update` を起動します。選んだパッケージマネージャーをすべて更新し、結果を記録に書き、通知を出します。
 自動更新をオフにすると、タイマーは消えます。
+
+### 起動時の確認
+
+これも Suisha を常駐させるものではありません。最初からオンで、スイッチ（または `suisha autostart on|off`）は設定を切り替えるだけです。
+
+- **Ubuntu**：`suisha-cli` のパッケージが、すべてのユーザー向けに systemd のユーザータイマー `/usr/lib/systemd/user/suisha-startup-check.timer` を入れます。あなたのユーザーの systemd が動き始めてから 2 分後に `suisha --startup-check` を実行します。動き始めるのはログインしたとき、linger が有効ならコンピューターの起動時です（`suisha on` を実行したサーバー、または `suisha autostart on --linger`）。ログイン画面などのシステム用のアカウントでは動きません
+- **macOS**：ログイン時に動く launchd のエージェント（`~/Library/LaunchAgents/dev.moriyama.suisha.startup-check.plist`）。1 分待ってから確認します。出力は `~/Library/Logs/Suisha/startup-check.log` に残ります
+
+確認では、待っている更新を数えて結果を残し（`suisha status` で見られます）、1件以上あれば通知を出します。自動更新がオンのときは、代わりに自動更新を1回実行します。確認だけのときは、何もインストールしません。
 
 Mac App Store のアプリは、Suisha の自動更新には含めません。App Store の設定で **自動アップデート** をオンにすると、App Store が自分で更新します。
 

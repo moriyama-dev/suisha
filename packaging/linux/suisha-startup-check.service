@@ -1,0 +1,12 @@
+[Unit]
+Description=Suisha: check for updates after starting
+Documentation=https://github.com/moriyama-dev/suisha
+# Not for the login screen and other system accounts; root is fine (servers).
+ConditionUser=|root
+ConditionUser=|!@system
+
+[Service]
+Type=oneshot
+# Does nothing when the check at startup is turned off
+# (suisha autostart off, or the switch in the window).
+ExecStart=/usr/bin/suisha --startup-check

@@ -8,6 +8,7 @@ use suisha_core::store::{self, HistoryEntry};
 use suisha_core::system::{self, SystemStatus};
 
 use crate::args::Args;
+use crate::autostart;
 use crate::packages::chosen;
 use crate::run::print_json;
 use crate::schedule;
@@ -33,6 +34,7 @@ struct Status {
     os: &'static str,
     managers: Vec<ManagerStatus>,
     auto_update: schedule::Info,
+    startup_check: autostart::Info,
     system: SystemStatus,
 }
 
@@ -59,6 +61,7 @@ pub fn status(args: &Args) -> Result<i32, String> {
         os: setup_file::current_os(),
         managers: chosen(args)?.into_iter().map(manager_status).collect(),
         auto_update: schedule::info(),
+        startup_check: autostart::info(),
         system: system::status(),
     };
     let failed = status.managers.iter().any(|m| m.error.is_some());
@@ -115,6 +118,12 @@ pub fn status(args: &Args) -> Result<i32, String> {
     println!();
     println!("{}", tr!("Automatic updates", "自動更新"));
     for line in schedule::lines(&status.auto_update) {
+        println!("  {line}");
+    }
+
+    println!();
+    println!("{}", tr!("Check at startup", "起動時の確認"));
+    for line in autostart::lines(&status.startup_check) {
         println!("  {line}");
     }
 

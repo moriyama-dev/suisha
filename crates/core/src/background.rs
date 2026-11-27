@@ -1,5 +1,6 @@
-//! Command line modes that run without a window:
-//! `--auto-update` (started by the system timer) and `--self-check`.
+//! Command line modes that run without a window: `--auto-update` (started
+//! by the system timer), `--startup-check` (a little after the computer
+//! starts or the user logs in) and `--self-check`.
 
 use std::collections::HashSet;
 use std::fs::{self, OpenOptions};
@@ -73,6 +74,10 @@ fn texts(lang: &str) -> [&'static str; 4] {
 }
 
 fn notify(title: &str, body: &str) {
+    notify_with(title, body, &[]);
+}
+
+fn notify_with(title: &str, body: &str, extra: &[&str]) {
     if cfg!(target_os = "macos") {
         // The texts reach AppleScript as arguments, never as script code.
         if let Some(osascript) = find_bin("osascript") {
@@ -94,16 +99,25 @@ fn notify(title: &str, body: &str) {
         return;
     }
     if let Some(notify_send) = find_bin("notify-send") {
-        let _ = run(
-            &notify_send,
-            &["--app-name=Suisha", "--icon=suisha", title, body],
-            Duration::from_secs(20),
-        );
+        let mut args = vec!["--app-name=Suisha", "--icon=suisha"];
+        args.extend_from_slice(extra);
+        args.extend_from_slice(&[title, body]);
+        let _ = run(&notify_send, &args, Duration::from_secs(20));
+    }
+}
+
+/// macOS: the login agent is written by Suisha itself, so people who
+/// updated from a version without it get it from the next background run,
+/// even if they never open the window.
+fn keep_startup_agent(settings: &store::Settings) {
+    if cfg!(target_os = "macos") {
+        let _ = crate::schedule::apply_startup_check(settings.startup_check);
     }
 }
 
 pub fn auto_update() -> i32 {
     let settings = store::load_settings();
+    keep_startup_agent(&settings);
     let a = &settings.auto_update;
     if !a.enabled {
         return 0;
@@ -189,6 +203,83 @@ pub fn auto_update() -> i32 {
     if result.success { 0 } else { 1 }
 }
 
+fn waiting_texts(lang: &str, n: usize) -> (String, String) {
+    if lang == "ja" {
+        (
+            "更新があります".into(),
+            format!("{n} 件の更新を入れられます。Suisha を開いて更新してください。"),
+        )
+    } else if n == 1 {
+        (
+            "An update is waiting".into(),
+            "1 update can be installed. Open Suisha to install it.".into(),
+        )
+    } else {
+        (
+            "Updates are waiting".into(),
+            format!("{n} updates can be installed. Open Suisha to install them."),
+        )
+    }
+}
+
+/// Started a little after the computer starts or the user logs in (a
+/// systemd user timer on Linux, a launchd agent on macOS). With automatic
+/// updates on, it runs one now; otherwise it counts the waiting updates and
+/// says so in a notification. Suisha does not stay running either way.
+pub fn startup_check() -> i32 {
+    let settings = store::load_settings();
+    if !settings.startup_check {
+        return 0;
+    }
+    if cfg!(target_os = "macos") {
+        // launchd also starts the agent when Suisha loads it, which is not a
+        // login. Suisha marks that moment just before loading it.
+        let marker = crate::schedule::startup_marker();
+        let just_loaded = fs::metadata(&marker)
+            .ok()
+            .and_then(|m| m.modified().ok())
+            .and_then(|m| SystemTime::now().duration_since(m).ok())
+            .is_some_and(|age| age < Duration::from_secs(90));
+        if just_loaded {
+            return 0;
+        }
+        // Give the network a moment after logging in. (On Linux the timer
+        // waits instead.)
+        std::thread::sleep(Duration::from_secs(60));
+    }
+
+    if settings.auto_update.enabled {
+        let code = auto_update();
+        store::save_startup_check(&store::StartupCheck {
+            time: store::now(),
+            updates: pending(&managers::available()).len(),
+            updated: true,
+        });
+        return code;
+    }
+
+    let waiting = pending(&managers::available()).len();
+    store::save_startup_check(&store::StartupCheck {
+        time: store::now(),
+        updates: waiting,
+        updated: false,
+    });
+    // For the journal (`journalctl --user -u suisha-startup-check`).
+    println!("suisha: {waiting} updates waiting");
+    if waiting > 0 {
+        let (title, body) = waiting_texts(&settings.language, waiting);
+        // Clicking the notification opens the window, where there is one.
+        let window = std::path::Path::new("/usr/share/applications/Suisha.desktop").is_file();
+        let hint: &[&str] = if window {
+            &["--hint=string:desktop-entry:Suisha"]
+        } else {
+            &[]
+        };
+        notify_with(&title, &body, hint);
+    }
+    0
+}
+
 fn count(r: &Result<Vec<crate::model::Package>, String>) -> serde_json::Value {
     match r {
         Ok(list) => list.len().into(),
@@ -200,6 +291,7 @@ fn count(r: &Result<Vec<crate::model::Package>, String>) -> serde_json::Value {
 /// "update Suisha automatically" on.
 pub fn self_update() -> i32 {
     let settings = store::load_settings();
+    keep_startup_agent(&settings);
     if !settings.self_update_auto {
         return 0;
     }
@@ -311,4 +403,23 @@ pub fn self_check() -> i32 {
         serde_json::to_string_pretty(&serde_json::Value::Object(report)).unwrap_or_default()
     );
     if ok { 0 } else { 1 }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn says_how_many_updates_wait() {
+        assert_eq!(
+            waiting_texts("en", 1).1,
+            "1 update can be installed. Open Suisha to install it."
+        );
+        assert!(
+            waiting_texts("en", 3)
+                .1
+                .starts_with("3 updates can be installed.")
+        );
+        assert!(waiting_texts("ja", 3).1.starts_with("3 件の更新"));
+    }
 }

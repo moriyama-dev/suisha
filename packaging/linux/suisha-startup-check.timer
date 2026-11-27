@@ -1,0 +1,10 @@
+[Unit]
+Description=Suisha: check for updates after starting (timer)
+
+[Timer]
+# Counted from when systemd starts for the user: at login on a desktop, at
+# boot on a server with lingering turned on.
+OnStartupSec=2min
+
+[Install]
+WantedBy=timers.target

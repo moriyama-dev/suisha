@@ -60,6 +60,8 @@ struct AppInfo {
     /// "Update Suisha automatically" can be turned on (the Suisha package on
     /// Linux, the Homebrew cask on macOS).
     self_update_auto: bool,
+    /// The check at startup can run here.
+    startup_check: bool,
 }
 
 #[tauri::command]
@@ -72,6 +74,7 @@ async fn app_info() -> Result<AppInfo, String> {
             helpers: demo() || privileged::helpers_installed(),
             auto_update_allowed: demo() || privileged::auto_update_allowed(),
             self_update_auto: demo() || self_update::auto_supported(),
+            startup_check: demo() || schedule::startup_supported(),
         })
     })
     .await
@@ -238,6 +241,21 @@ async fn set_self_update_auto(enabled: bool) -> Result<Settings, String> {
     blocking(move || schedule::save_self_update(enabled)).await
 }
 
+/// Turn the check for updates after starting up on or off.
+#[tauri::command]
+async fn set_startup_check(enabled: bool) -> Result<Settings, String> {
+    blocking(move || schedule::save_startup_check(enabled)).await
+}
+
+/// The person has read the note about the check at startup.
+#[tauri::command]
+fn dismiss_startup_notice() -> Result<Settings, String> {
+    let mut settings = store::load_settings();
+    settings.startup_check_noticed = true;
+    store::save_settings(&settings)?;
+    Ok(settings)
+}
+
 #[tauri::command]
 async fn system_status() -> Result<system::SystemStatus, String> {
     blocking(|| {
@@ -352,6 +370,8 @@ pub fn run() {
     if settings.self_update_auto {
         let _ = schedule::apply_self_update(true);
     }
+    // macOS: the login agent (Linux: installed by the package).
+    let _ = schedule::apply_startup_check(settings.startup_check);
 
     tauri::Builder::default()
         .setup(|_app| {
@@ -388,6 +408,8 @@ pub fn run() {
             check_self_update,
             update_self,
             set_self_update_auto,
+            set_startup_check,
+            dismiss_startup_notice,
             set_history_keep_days,
             system_status,
             clean_up,

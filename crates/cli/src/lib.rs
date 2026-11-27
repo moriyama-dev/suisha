@@ -4,6 +4,7 @@
 //! the other commands also work from the app on macOS.
 
 mod args;
+mod autostart;
 mod feedback;
 mod own;
 mod packages;
@@ -20,7 +21,12 @@ use suisha_core::{background, privileged, system};
 use text::tr;
 
 /// What timers and release checks call; these never ask anything.
-const BACKGROUND: [&str; 3] = ["--auto-update", "--self-update", "--self-check"];
+const BACKGROUND: [&str; 4] = [
+    "--auto-update",
+    "--startup-check",
+    "--self-update",
+    "--self-check",
+];
 
 /// Whether `arg`, as the first argument, is something this module handles.
 /// The window's program uses it to decide between a command and the window.
@@ -71,6 +77,7 @@ Automate
   schedule set weekly sun 03:00
   schedule set every 6h  1h, 3h, 6h or 12h; --minute 30 for half past
   schedule on | off
+  autostart on | off     Check for updates when the computer starts or you log in (on at first)
   export [FILE]          Save the list of installed apps (prints it without FILE)
   setup FILE             Install what a saved list has and this computer lacks
 
@@ -86,7 +93,7 @@ Options
       --dry-run          Show the commands without running them
       --json             Print the result as JSON
       --linger, --no-linger
-                         (on, schedule) keep the timer running while logged out, or not
+                         (on, schedule, autostart) keep the timer running while logged out, or not
 
 A package is written MANAGER:NAME, the way `suisha list` and `suisha search` print it.
 Every command Suisha runs is shown before it runs. Suisha sends nothing about you or
@@ -120,6 +127,7 @@ apt・snap・Flatpak・Homebrew を1つのコマンドで扱います。
   schedule set weekly sun 03:00
   schedule set every 6h  1h・3h・6h・12h。--minute 30 で毎時 30 分
   schedule on | off
+  autostart on | off     起動やログインの少しあとに更新を確認する（最初はオン）
   export [ファイル]      入っているアプリの一覧を保存する（ファイルを省くと画面に出す）
   setup ファイル         保存した一覧のうち、このコンピューターに無いものを入れる
 
@@ -135,7 +143,7 @@ Suisha 自体
       --dry-run          コマンドを表示するだけで、実行しない
       --json             結果を JSON で出す
       --linger, --no-linger
-                         （on、schedule）ログアウト中もタイマーを動かす／動かさない
+                         （on、schedule、autostart）ログアウト中もタイマーを動かす／動かさない
 
 パッケージは「マネージャー:名前」の形で書きます。`suisha list` と `suisha search` の表示と同じです。
 Suisha が実行するコマンドは、実行の前にすべて表示します。あなたやこのコンピューターの情報を、
@@ -161,6 +169,7 @@ fn quit_quietly_on_closed_pipe() {
 pub fn run(args: &[String]) -> i32 {
     match args.first().map(String::as_str) {
         Some("--auto-update") => return background::auto_update(),
+        Some("--startup-check") => return background::startup_check(),
         Some("--self-update") => return background::self_update(),
         Some("--self-check") => return background::self_check(),
         _ => {}
@@ -208,6 +217,7 @@ pub fn run(args: &[String]) -> i32 {
         "schedule" => schedule::schedule(&args),
         "on" => schedule::on(&args),
         "off" => schedule::off(&args),
+        "autostart" => autostart::autostart(&args),
         "export" => setup::export(&args),
         "setup" => setup::setup(&args),
         "self-update" => own::self_update(&args),
@@ -236,6 +246,7 @@ mod tests {
             "on",
             "off",
             "--auto-update",
+            "--startup-check",
             "--self-check",
             "--version",
             "-h",

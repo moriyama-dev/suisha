@@ -229,6 +229,39 @@ pub fn parse_when(
     Ok(a)
 }
 
+/// A server has nobody logged in most of the time. Without lingering, the
+/// user's timers only run during a login session. This comes before a timer
+/// is written: lingering also starts systemd for a user who is not logged in
+/// at all (a shell from `sudo -i`, for example). Returns false when it was
+/// wanted and failed.
+pub fn keep_running_when_logged_out(args: &Args) -> bool {
+    let linger = timers::linger();
+    let wanted = args.linger.unwrap_or(!system::has_display());
+    if !(wanted && (linger == Some(false) || (linger.is_none() && args.linger == Some(true)))) {
+        return true;
+    }
+    match run::sudo_login().and_then(|_| privileged::enable_linger()) {
+        Ok(()) => {
+            timers::wait_for_user_systemd();
+            say(
+                args,
+                tr!(
+                    "The timer also runs while you are logged out (lingering was turned on for your user).",
+                    "ログアウトしている間もタイマーが動くようにしました（あなたのユーザーの linger を有効にしました）。"
+                ),
+            );
+            true
+        }
+        Err(e) => {
+            warn(tr!(
+                "Could not keep the timer running while you are logged out: {e}",
+                "ログアウト中もタイマーを動かす設定ができませんでした：{e}"
+            ));
+            false
+        }
+    }
+}
+
 fn apply(args: &Args, a: AutoUpdate) -> Result<i32, String> {
     let mut code = 0;
     let mut settings = store::load_settings();
@@ -258,35 +291,8 @@ fn apply(args: &Args, a: AutoUpdate) -> Result<i32, String> {
         let _ = run::sudo_login();
     }
 
-    // A server has nobody logged in most of the time. Without lingering,
-    // the user's timers only run during a login session. This comes before
-    // the timer is written: lingering also starts systemd for a user who is
-    // not logged in at all (a shell from `sudo -i`, for example).
-    let linger = timers::linger();
-    let wanted = args.linger.unwrap_or(!system::has_display());
-    if a.enabled
-        && wanted
-        && (linger == Some(false) || (linger.is_none() && args.linger == Some(true)))
-    {
-        match run::sudo_login().and_then(|_| privileged::enable_linger()) {
-            Ok(()) => {
-                timers::wait_for_user_systemd();
-                say(
-                    args,
-                    tr!(
-                        "The timer also runs while you are logged out (lingering was turned on for your user).",
-                        "ログアウトしている間もタイマーが動くようにしました（あなたのユーザーの linger を有効にしました）。"
-                    ),
-                );
-            }
-            Err(e) => {
-                warn(tr!(
-                    "Could not keep the timer running while you are logged out: {e}",
-                    "ログアウト中もタイマーを動かす設定ができませんでした：{e}"
-                ));
-                code = 1;
-            }
-        }
+    if a.enabled && !keep_running_when_logged_out(args) {
+        code = 1;
     }
 
     settings.auto_update = a;

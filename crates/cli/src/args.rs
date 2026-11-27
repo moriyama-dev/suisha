@@ -5,7 +5,7 @@ use suisha_core::model::ManagerId;
 use crate::text::tr;
 
 /// The commands `suisha` understands.
-pub const COMMANDS: [&str; 19] = [
+pub const COMMANDS: [&str; 20] = [
     "status",
     "updates",
     "update",
@@ -17,6 +17,7 @@ pub const COMMANDS: [&str; 19] = [
     "schedule",
     "on",
     "off",
+    "autostart",
     "export",
     "setup",
     "cleanup",
@@ -202,6 +203,12 @@ mod tests {
         assert_eq!(a.managers, vec![ManagerId::Apt]);
         assert_eq!(a.minute, Some(30));
         assert_eq!(parse_words(&["off"]).unwrap().command, "off");
+        let a = parse_words(&["autostart", "on", "--no-linger"]).unwrap();
+        assert_eq!(
+            (a.command.as_str(), a.positional.as_slice()),
+            ("autostart", &["on".to_string()][..])
+        );
+        assert_eq!(a.linger, Some(false));
     }
 
     #[test]

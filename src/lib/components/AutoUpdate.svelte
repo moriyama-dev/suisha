@@ -143,6 +143,30 @@
     }
   }
 
+  let switchingStartup = $state(false);
+  const startupShown = $derived(!!app.info?.startupCheck && !!app.settings);
+
+  async function setStartup(enabled: boolean) {
+    switchingStartup = true;
+    message = null;
+    try {
+      app.settings = await api.setStartupCheck(enabled);
+      message = { cls: 'ok', text: enabled ? t('startup.onDone') : t('startup.offDone') };
+    } catch (e) {
+      message = { cls: 'error', text: tMessage(String(e)) };
+    } finally {
+      switchingStartup = false;
+    }
+  }
+
+  async function dismissStartupNotice() {
+    try {
+      app.settings = await api.dismissStartupNotice();
+    } catch {
+      // Shown again next time; nothing else depends on it.
+    }
+  }
+
   function toggle() {
     if (!a) return;
     if (a.enabled) save({ ...a, enabled: false });
@@ -230,6 +254,28 @@
         </button>
       </div>
     {/if}
+  {/if}
+
+  {#if startupShown && !draft}
+    <div class="startup">
+      <label class="check">
+        <input
+          type="checkbox"
+          checked={app.settings?.startupCheck}
+          disabled={switchingStartup}
+          onchange={(e) => setStartup(e.currentTarget.checked)}
+        />
+        <strong>{t('startup.title')}</strong>
+        {#if switchingStartup}<span class="spinner"></span>{/if}
+      </label>
+      <p class="muted small">{a?.enabled ? t('startup.textAuto') : t('startup.text')}</p>
+      {#if app.settings?.startupCheck && !app.settings?.startupCheckNoticed}
+        <div class="new small">
+          <p>{t('startup.new')}</p>
+          <button onclick={dismissStartupNotice}>{t('startup.ok')}</button>
+        </div>
+      {/if}
+    </div>
   {/if}
 
   {#if draft}
@@ -540,5 +586,31 @@
 
   .msg {
     margin-top: 14px;
+  }
+
+  .startup {
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: 1px solid var(--border);
+    display: grid;
+    gap: 4px;
+  }
+
+  .startup p {
+    margin: 0;
+  }
+
+  .new {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 6px;
+    padding: 8px 12px;
+    border-radius: 10px;
+    background: var(--accent-soft);
+  }
+
+  .new p {
+    flex: 1;
   }
 </style>

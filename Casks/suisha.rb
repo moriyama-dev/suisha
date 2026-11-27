@@ -30,12 +30,14 @@ cask "suisha" do
   zap launchctl: [
         "dev.moriyama.suisha.auto-update",
         "dev.moriyama.suisha.self-update",
+        "dev.moriyama.suisha.startup-check",
       ],
       trash:     [
         "~/Library/Application Support/suisha",
         "~/Library/Caches/dev.moriyama.suisha",
         "~/Library/LaunchAgents/dev.moriyama.suisha.auto-update.plist",
         "~/Library/LaunchAgents/dev.moriyama.suisha.self-update.plist",
+        "~/Library/LaunchAgents/dev.moriyama.suisha.startup-check.plist",
         "~/Library/Logs/Suisha",
         "~/Library/WebKit/dev.moriyama.suisha",
       ]
