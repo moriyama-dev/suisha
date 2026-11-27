@@ -2,8 +2,8 @@
 #   brew tap moriyama-dev/suisha https://github.com/moriyama-dev/suisha
 #   brew install --cask moriyama-dev/suisha/suisha
 cask "suisha" do
-  version "0.6.0"
-  sha256 "da455aeeea7caf23277618a28b9d26e1206862847ea94bef8161fa8154119db2"
+  version "0.6.1"
+  sha256 "7a2e850291caea2ce31c95d68107fbdf8181b83434720eb0ed3d11c596470d6b"
 
   url "https://github.com/moriyama-dev/suisha/releases/download/#{version}/suisha-#{version}-macos-universal.dmg"
   name "Suisha"
